@@ -1,0 +1,2878 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Text Mining mit R — Lernapp</title>
+<style>
+  :root {
+    --green: #58cc02;
+    --green-dark: #46a302;
+    --red: #ff4b4b;
+    --red-dark: #cc0000;
+    --blue: #1cb0f6;
+    --blue-dark: #0a8abf;
+    --yellow: #ffd900;
+    --yellow-dark: #c8aa00;
+    --bg: #f7f8fa;
+    --card: #ffffff;
+    --text: #1a1a2e;
+    --muted: #777c8a;
+    --border: #e5e7eb;
+    --radius: 16px;
+    --shadow: 0 4px 20px rgba(0,0,0,0.08);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* ── Header ── */
+  header {
+    width: 100%;
+    background: white;
+    border-bottom: 2px solid var(--border);
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 64px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  }
+  .logo { font-size: 1.25rem; font-weight: 800; color: var(--green); letter-spacing: -0.5px; }
+  .logo span { color: var(--text); }
+  .stats { display: flex; gap: 20px; align-items: center; }
+  .stat { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 0.95rem; }
+  .stat-icon { font-size: 1.2rem; }
+  .streak { color: #ff9600; }
+  .xp { color: var(--blue); }
+  .hearts { color: var(--red); }
+
+  /* ── Progress bar ── */
+  .progress-bar-wrap {
+    width: 100%;
+    max-width: 680px;
+    padding: 20px 24px 0;
+  }
+  .progress-bar-track {
+    height: 14px;
+    background: var(--border);
+    border-radius: 7px;
+    overflow: hidden;
+    position: relative;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--green), #82e000);
+    border-radius: 7px;
+    transition: width 0.5s cubic-bezier(.34,1.56,.64,1);
+  }
+  .progress-label {
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-top: 4px;
+    text-align: right;
+  }
+
+  /* ── Main card ── */
+  main {
+    max-width: 680px;
+    padding: 24px;
+    flex: 1;
+    margin: 0 auto;
+  }
+
+  .card {
+    background: var(--card);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 36px;
+    margin-bottom: 20px;
+    border: 2px solid transparent;
+    transition: border-color 0.3s;
+  }
+
+  /* ── Question ── */
+  .question-meta {
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+  .question-text {
+    font-size: 1.25rem;
+    font-weight: 700;
+    line-height: 1.4;
+    margin-bottom: 8px;
+  }
+  .question-hint {
+    font-size: 0.9rem;
+    color: var(--muted);
+    margin-bottom: 28px;
+    line-height: 1.5;
+  }
+  code, .inline-code {
+    font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    background: #f0f4ff;
+    border: 1px solid #d0d8ff;
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 0.9em;
+    color: #2d3a8c;
+  }
+
+  /* ── Multiple choice options ── */
+  .options { display: flex; flex-direction: column; gap: 12px; }
+  .option-btn {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 20px;
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    background: white;
+    cursor: pointer;
+    font-size: 1rem;
+    font-family: inherit;
+    color: var(--text);
+    transition: all 0.15s;
+    text-align: left;
+    font-weight: 600;
+  }
+  .option-btn:hover:not(:disabled) {
+    border-color: var(--blue);
+    background: #f0faff;
+    transform: translateY(-1px);
+  }
+  .option-btn.correct {
+    border-color: var(--green);
+    background: #f0fff0;
+    color: var(--green-dark);
+  }
+  .option-btn.wrong {
+    border-color: var(--red);
+    background: #fff0f0;
+    color: var(--red-dark);
+  }
+  .option-btn:disabled { cursor: default; }
+  .option-letter {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    background: var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+    transition: background 0.15s;
+  }
+  .option-btn.correct .option-letter { background: var(--green); color: white; }
+  .option-btn.wrong .option-letter { background: var(--red); color: white; }
+
+  /* ── Code input ── */
+  .code-input-wrap { position: relative; }
+  .code-input {
+    width: 100%;
+    padding: 16px 20px;
+    font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    font-size: 1rem;
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    background: #fafbff;
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.2s;
+    resize: vertical;
+    min-height: 60px;
+  }
+  .code-input:focus { border-color: var(--blue); background: white; }
+  .code-input.correct { border-color: var(--green); background: #f0fff0; }
+  .code-input.wrong { border-color: var(--red); background: #fff0f0; }
+  .code-hint-btn {
+    position: absolute; right: 12px; top: 12px;
+    background: none; border: none; cursor: pointer;
+    color: var(--muted); font-size: 0.8rem; padding: 4px 8px;
+    border-radius: 6px; transition: background 0.15s;
+  }
+  .code-hint-btn:hover { background: var(--border); }
+
+  /* ── Fill in the blank ── */
+  .blank-input {
+    display: inline-block;
+    border: none; border-bottom: 3px solid var(--blue);
+    outline: none;
+    font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    font-size: 1rem;
+    width: 180px;
+    background: transparent;
+    color: var(--text);
+    padding: 2px 4px;
+    transition: border-color 0.2s;
+  }
+  .blank-input.correct { border-color: var(--green); color: var(--green-dark); }
+  .blank-input.wrong { border-color: var(--red); color: var(--red-dark); }
+  .blank-sentence {
+    font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    font-size: 1.05rem;
+    line-height: 2.2;
+    background: #fafbff;
+    padding: 20px 24px;
+    border-radius: 12px;
+    border: 2px solid var(--border);
+  }
+
+  /* ── Feedback panel ── */
+  .feedback {
+    border-radius: var(--radius);
+    padding: 20px 28px;
+    margin-bottom: 20px;
+    display: none;
+    animation: slideUp 0.3s ease;
+    border: 2px solid transparent;
+  }
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .feedback.correct-fb {
+    background: #f0fff0;
+    border-color: var(--green);
+    display: block;
+  }
+  .feedback.wrong-fb {
+    background: #fff5f5;
+    border-color: var(--red);
+    display: block;
+  }
+  .feedback-title {
+    font-size: 1.1rem;
+    font-weight: 800;
+    margin-bottom: 6px;
+  }
+  .feedback.correct-fb .feedback-title { color: var(--green-dark); }
+  .feedback.wrong-fb .feedback-title { color: var(--red-dark); }
+  .feedback-body { font-size: 0.95rem; color: var(--text); line-height: 1.5; }
+  .feedback-body code { font-size: 0.9em; }
+
+  /* ── Buttons ── */
+  .btn {
+    padding: 16px 36px;
+    border-radius: 12px;
+    border: none;
+    font-family: inherit;
+    font-size: 1rem;
+    font-weight: 800;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.02em;
+  }
+  .btn:active { transform: translateY(1px); }
+  .btn-primary {
+    background: var(--green);
+    color: white;
+    border-bottom: 4px solid var(--green-dark);
+    width: 100%;
+  }
+  .btn-primary:hover { background: #5cd803; }
+  .btn-primary:disabled { background: #ccc; border-color: #aaa; cursor: default; }
+  .btn-secondary {
+    background: var(--bg);
+    color: var(--muted);
+    border: 2px solid var(--border);
+  }
+  .btn-check {
+    background: var(--blue);
+    color: white;
+    border-bottom: 4px solid var(--blue-dark);
+    width: 100%;
+  }
+  .btn-check:hover { background: #2bbfff; }
+  .btn-check:disabled { background: #ccc; border-color: #aaa; cursor: default; }
+
+  /* ── Action row ── */
+  .action-row { display: flex; gap: 12px; align-items: center; }
+  .action-row .btn { flex: 1; }
+
+  /* ── Session finished ── */
+  .finish-screen {
+    text-align: center;
+    padding: 40px 20px;
+  }
+  .finish-emoji { font-size: 4rem; margin-bottom: 16px; }
+  .finish-title { font-size: 2rem; font-weight: 800; margin-bottom: 8px; }
+  .finish-sub { color: var(--muted); margin-bottom: 32px; font-size: 1.05rem; }
+  .finish-stats {
+    display: flex; gap: 24px; justify-content: center;
+    margin-bottom: 32px; flex-wrap: wrap;
+  }
+  .finish-stat {
+    background: var(--card);
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 28px;
+    min-width: 120px;
+  }
+  .finish-stat-value { font-size: 2rem; font-weight: 800; }
+  .finish-stat-label { font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+
+  /* ── Home screen ── */
+  #home-screen { width: 100%; max-width: 680px; padding: 32px 24px; }
+  .hero { text-align: center; margin-bottom: 40px; }
+  .hero-title { font-size: 2.2rem; font-weight: 800; line-height: 1.2; margin-bottom: 12px; }
+  .hero-sub { font-size: 1.05rem; color: var(--muted); line-height: 1.6; }
+  .topic-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px; }
+  .topic-card {
+    background: white;
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+  .topic-card:hover { border-color: var(--green); transform: translateY(-2px); box-shadow: var(--shadow); }
+  .topic-card.locked { opacity: 0.45; cursor: not-allowed; }
+  .topic-card.locked:hover { transform: none; border-color: var(--border); }
+  .topic-icon { font-size: 1.8rem; margin-bottom: 8px; }
+  .topic-name { font-weight: 700; font-size: 0.95rem; margin-bottom: 4px; }
+  .topic-count { font-size: 0.8rem; color: var(--muted); }
+  .topic-progress-bar { height: 5px; background: var(--border); border-radius: 3px; margin-top: 10px; overflow: hidden; }
+  .topic-progress-fill { height: 100%; background: var(--green); border-radius: 3px; }
+  .topic-badge {
+    position: absolute; top: 10px; right: 10px;
+    background: var(--yellow); color: #7a5c00;
+    font-size: 0.65rem; font-weight: 800;
+    padding: 2px 8px; border-radius: 20px; text-transform: uppercase;
+  }
+  .topic-badge.mastered { background: var(--green); color: white; }
+
+  .all-topics-btn {
+    width: 100%;
+    padding: 16px;
+    background: white;
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    font-family: inherit;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    color: var(--text);
+    transition: all 0.2s;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .all-topics-btn:hover { border-color: var(--blue); color: var(--blue); }
+
+  /* ── Home action cards (Wiederholen / Fehler / Statistik) ── */
+  .home-actions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 28px; }
+  .action-card {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+    background: white; border: 2px solid var(--border); border-radius: var(--radius);
+    padding: 18px; cursor: pointer; font-family: inherit; text-align: left;
+    transition: all 0.2s; color: var(--text);
+  }
+  .action-card:hover:not(:disabled) { transform: translateY(-2px); box-shadow: var(--shadow); border-color: var(--green); }
+  .action-card:disabled { opacity: 0.5; cursor: default; }
+  .action-card.primary { background: linear-gradient(135deg, #58cc02, #46a302); border-color: transparent; color: white; }
+  .action-card.primary:hover:not(:disabled) { border-color: transparent; filter: brightness(1.05); }
+  .action-emoji { font-size: 1.6rem; }
+  .action-title { font-weight: 800; font-size: 1rem; }
+  .action-sub { font-size: 0.8rem; opacity: 0.85; }
+  .section-label { font-size: 0.78rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 12px; }
+
+  /* ── Stats screen ── */
+  .stats-overview { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 10px; }
+  .stat-tile { background: var(--bg); border: 2px solid var(--border); border-radius: 12px; padding: 12px; text-align: center; }
+  .stat-tile-value { font-size: 1.6rem; font-weight: 800; }
+  .stat-tile-label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .stats-topic-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .stats-topic-name { width: 38%; font-size: 0.88rem; font-weight: 600; }
+  .stats-topic-track { flex: 1; height: 10px; background: var(--border); border-radius: 5px; overflow: hidden; }
+  .stats-topic-fill { height: 100%; border-radius: 5px; }
+  .stats-topic-pct { width: 42px; text-align: right; font-size: 0.8rem; font-weight: 700; color: var(--muted); }
+
+  /* ── Profil-Chip im Header ── */
+  .profile-chip {
+    display: flex; align-items: center; gap: 5px;
+    background: var(--bg); border: 2px solid var(--border); border-radius: 20px;
+    padding: 5px 12px; cursor: pointer; font-family: inherit; font-weight: 700;
+    font-size: 0.85rem; color: var(--text); transition: all 0.15s; max-width: 160px;
+  }
+  .profile-chip:hover { border-color: var(--blue); color: var(--blue); }
+  .profile-chip #profile-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* ── Profil-Auswahl ── */
+  .profile-input {
+    flex: 1; padding: 14px 16px; border: 2px solid var(--border); border-radius: 12px;
+    font-family: inherit; font-size: 1rem; background: var(--bg); color: var(--text); outline: none;
+    transition: border-color 0.2s;
+  }
+  .profile-input:focus { border-color: var(--blue); background: var(--card); }
+  .profile-row {
+    display: flex; align-items: center; gap: 12px;
+    background: white; border: 2px solid var(--border); border-radius: var(--radius);
+    padding: 16px 20px; cursor: pointer; transition: all 0.2s;
+  }
+  .profile-row:hover { border-color: var(--green); transform: translateY(-1px); box-shadow: var(--shadow); }
+  .profile-row-icon { font-size: 1.5rem; }
+  .profile-row-info { flex: 1; }
+  .profile-row-name { font-weight: 800; font-size: 1.05rem; }
+  .profile-row-meta { font-size: 0.8rem; color: var(--muted); }
+  .profile-row-del {
+    background: none; border: none; color: var(--muted); cursor: pointer;
+    font-size: 1.1rem; padding: 6px 8px; border-radius: 8px; transition: all 0.15s;
+  }
+  .profile-row-del:hover { background: #fee; color: var(--red); }
+
+  /* ── Tipp-Button (versteckt den Tipp bis zum Klick) ── */
+  .hint-btn {
+    background: var(--bg); border: 2px solid var(--border); border-radius: 20px;
+    padding: 6px 14px; cursor: pointer; font-family: inherit; font-size: 0.85rem;
+    font-weight: 700; color: var(--muted); transition: all 0.15s;
+  }
+  .hint-btn:hover { border-color: var(--yellow-dark); color: var(--yellow-dark); }
+  .hint-reveal { display: block; }
+
+  /* ── Quiz: Zurück-zur-Übersicht-Button ── */
+  .quiz-home-btn {
+    flex-shrink: 0; width: 34px; height: 34px; border-radius: 9px;
+    border: 2px solid var(--border); background: var(--card); color: var(--muted);
+    font-size: 1.1rem; font-weight: 800; cursor: pointer; line-height: 1;
+    display: flex; align-items: center; justify-content: center; transition: all 0.15s;
+  }
+  .quiz-home-btn:hover { border-color: var(--blue); color: var(--blue); }
+
+  /* ── Handbuch-Link im Feedback ── */
+  .hb-link { margin-top: 12px; font-size: 0.9rem; }
+  .hb-link a { color: var(--blue-dark); font-weight: 700; text-decoration: none; }
+  .hb-link a:hover { text-decoration: underline; }
+
+  /* ── Lösung-anzeigen-Link ── */
+  .reveal-btn {
+    background: none; border: none; color: var(--muted); cursor: pointer;
+    font-family: inherit; font-size: 0.82rem; padding: 8px 0 0; text-decoration: underline;
+  }
+  .reveal-btn:hover { color: var(--blue); }
+
+  /* ── Tastatur-Hinweis ── */
+  .kbd { display: inline-block; min-width: 18px; padding: 1px 5px; border: 1px solid var(--border);
+    border-bottom-width: 2px; border-radius: 4px; font-size: 0.72rem; font-family: monospace;
+    background: var(--bg); color: var(--muted); text-align: center; }
+
+  /* ── Responsive ── */
+  @media (max-width: 520px) {
+    .topic-grid { grid-template-columns: 1fr; }
+    .home-actions { grid-template-columns: 1fr; }
+    .card { padding: 24px; }
+    main { padding: 16px; }
+
+    /* Kompakter Header, damit nichts überläuft */
+    header { padding: 0 12px; }
+    .logo { font-size: 1.05rem; }
+    .stats { gap: 9px; }
+    #webr-label { display: none; }          /* nur der farbige Status-Punkt */
+    #webr-dot { margin-right: 0; }
+    .xp-word { display: none; }             /* "XP" weglassen, Zahl bleibt */
+    .stat { font-size: 0.85rem; }
+    .profile-chip { max-width: 84px; padding: 5px 9px; }
+    #theme-btn { width: 30px; height: 30px; }
+  }
+
+  /* Sehr schmal: Profil-Name ausblenden, nur Icon */
+  @media (max-width: 360px) {
+    .profile-chip #profile-name { display: none; }
+    .profile-chip { max-width: none; }
+  }
+
+  /* ── Dark mode (attributgesteuert; "auto" löst JS über matchMedia auf) ── */
+  :root[data-theme="dark"] {
+    --bg: #111827;
+    --card: #1f2937;
+    --text: #f3f4f6;
+    --muted: #9ca3af;
+    --border: #374151;
+  }
+  :root[data-theme="dark"] .code-input { background: #111827; }
+  :root[data-theme="dark"] .blank-sentence { background: #111827; }
+  :root[data-theme="dark"] .option-btn { background: #1f2937; }
+  :root[data-theme="dark"] .option-btn:hover:not(:disabled) { background: #0a2540; }
+  :root[data-theme="dark"] code,
+  :root[data-theme="dark"] .inline-code { background: #0f172a; color: #93c5fd; border-color: #1e3a5f; }
+  :root[data-theme="dark"] .action-card { background: #1f2937; }
+  :root[data-theme="dark"] .stat-tile { background: #111827; }
+  :root[data-theme="dark"] .kbd { background: #111827; }
+  :root[data-theme="dark"] .profile-row { background: #1f2937; }
+  :root[data-theme="dark"] .profile-row-del:hover { background: #3a1f1f; }
+
+  /* ── Konfetti ── */
+  .confetti-piece {
+    position: fixed; top: -12px; width: 10px; height: 14px; z-index: 9999;
+    pointer-events: none; opacity: 0.9; will-change: transform;
+    animation: confetti-fall linear forwards;
+  }
+  @keyframes confetti-fall {
+    to { transform: translateY(105vh) rotate(720deg); opacity: 1; }
+  }
+
+  /* ── Tagesziel-Ring ── */
+  .goal-ring-wrap { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 22px; }
+  .goal-ring-text { font-size: 0.85rem; color: var(--muted); font-weight: 700; }
+  .goal-ring-text b { color: var(--text); }
+
+  /* ── Onboarding-Overlay ── */
+  .overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 1000;
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .overlay-card {
+    background: var(--card); border-radius: var(--radius); max-width: 460px; width: 100%;
+    padding: 32px; box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  }
+  .overlay-card h2 { font-size: 1.5rem; margin-bottom: 16px; }
+  .onboard-item { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 16px; }
+  .onboard-item .oi-emoji { font-size: 1.5rem; flex-shrink: 0; }
+  .onboard-item .oi-text { font-size: 0.95rem; line-height: 1.45; color: var(--text); }
+  .onboard-item .oi-text b { font-weight: 800; }
+
+  /* ── Karteikarten-Blättermodus ── */
+  .flashcard {
+    background: var(--card); border: 2px solid var(--border); border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: 36px; min-height: 280px;
+    display: flex; flex-direction: column; justify-content: center;
+  }
+  .flashcard-q { font-size: 1.2rem; font-weight: 700; line-height: 1.45; }
+  .flashcard-side { font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 14px; }
+  .flashcard-answer { margin-top: 20px; padding-top: 20px; border-top: 2px dashed var(--border); }
+  .flashcard-answer .fa-label { font-size: 0.8rem; font-weight: 800; color: var(--green-dark); margin-bottom: 6px; }
+  .flashcard-nav { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px; }
+  .flashcard-nav .btn { flex: 1; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo" onclick="showHome()" onkeydown="if(event.key==='Enter'||event.key===' '){event.stopPropagation();event.preventDefault();showHome();}" title="Zur Startseite" role="button" tabindex="0" style="cursor:pointer">R<span>Mining</span></div>
+  <div class="stats">
+    <div class="stat webr" id="webr-status" title="Echte R-Ausführung im Browser (WebR)" style="font-size:0.8rem;color:var(--muted);font-weight:700">
+      <span id="webr-dot" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#bbb;margin-right:5px"></span><span id="webr-label">R-Engine</span>
+    </div>
+    <div class="stat streak"><span class="stat-icon">🔥</span><span id="streak-count">0</span></div>
+    <div class="stat xp"><span class="stat-icon">⚡</span><span id="xp-count">0</span><span class="xp-word">&nbsp;XP</span></div>
+    <button id="theme-btn" onclick="cycleTheme()" title="Hell / Dunkel / Automatisch"
+            style="background:var(--bg);border:2px solid var(--border);border-radius:50%;width:34px;height:34px;cursor:pointer;font-size:1rem;line-height:1">🌓</button>
+    <button class="profile-chip" id="profile-chip" onclick="showProfiles()" title="Profil wechseln">
+      <span class="stat-icon">👤</span><span id="profile-name">—</span> ▾
+    </button>
+  </div>
+</header>
+
+<!-- Home screen -->
+<div id="home-screen">
+  <div class="hero">
+    <div style="font-size:3rem;margin-bottom:12px">📊</div>
+    <div class="hero-title">Text Mining mit R<br>— Lernkarten</div>
+    <div class="hero-sub">Wiederhole die Seminarinhalte in kurzen Sessions. Fällige Karten kommen täglich wieder.</div>
+  </div>
+
+  <div class="goal-ring-wrap" id="goal-ring-wrap" onclick="cycleGoal()" style="cursor:pointer" title="Tagesziel ändern"></div>
+
+  <div class="home-actions">
+    <button class="action-card primary" id="btn-due" onclick="startDue()">
+      <span class="action-emoji">🔁</span>
+      <span class="action-title">Heute wiederholen</span>
+      <span class="action-sub" id="due-sub">…</span>
+    </button>
+    <button class="action-card" id="btn-mistakes" onclick="startMistakes()">
+      <span class="action-emoji">🎯</span>
+      <span class="action-title">Meine Fehler</span>
+      <span class="action-sub" id="mistakes-sub">…</span>
+    </button>
+    <button class="action-card" onclick="showStats()">
+      <span class="action-emoji">📈</span>
+      <span class="action-title">Statistik</span>
+      <span class="action-sub">Fortschritt &amp; Export</span>
+    </button>
+  </div>
+
+  <div class="section-label">Nach Thema üben</div>
+  <div class="topic-grid" id="topic-grid"></div>
+  <button class="all-topics-btn" onclick="startSession('all')" style="margin-bottom:12px">🎲 Alle Themen mischen (30 Fragen)</button>
+  <button class="all-topics-btn" onclick="startBrowse('all')">📇 Karteikarten durchblättern (ohne Wertung)</button>
+</div>
+
+<!-- Browse / Karteikarten screen -->
+<div id="browse-screen" style="display:none; width:100%; max-width:680px; padding:24px">
+  <div class="progress-bar-wrap" style="padding:0 0 16px">
+    <div style="display:flex;align-items:center;gap:12px">
+      <button class="quiz-home-btn" onclick="showHome()" title="Zur Übersicht" aria-label="Zur Übersicht">←</button>
+      <div style="flex:1;font-weight:800">📇 Karteikarten</div>
+      <div class="progress-label" style="margin:0"><span id="browse-current">1</span> / <span id="browse-total">0</span></div>
+    </div>
+  </div>
+  <div class="flashcard" id="flashcard"></div>
+  <div class="flashcard-nav">
+    <button class="btn btn-secondary" onclick="browsePrev()">← Zurück</button>
+    <button class="btn btn-check" id="browse-flip" onclick="browseFlip()" style="flex:1.4">Antwort zeigen</button>
+    <button class="btn btn-secondary" onclick="browseNext()">Weiter →</button>
+  </div>
+</div>
+
+<!-- Stats screen -->
+<div id="stats-screen" style="display:none; width:100%; max-width:680px; padding:24px">
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <div style="font-size:1.4rem;font-weight:800">📈 Dein Lernstand</div>
+      <button class="btn btn-secondary" style="padding:8px 18px" onclick="showHome()">← Zurück</button>
+    </div>
+    <div class="stats-overview" id="stats-overview"></div>
+    <div class="section-label" style="margin-top:24px">Themen (schwächste zuerst)</div>
+    <div id="stats-topics"></div>
+    <div class="section-label" style="margin-top:24px">Fortschritt sichern</div>
+    <div style="font-size:0.85rem;color:var(--muted);line-height:1.5;margin-bottom:12px">
+      Dein Fortschritt liegt nur in diesem Browser. Exportiere ihn, um ihn zu sichern oder auf ein anderes Gerät zu übertragen.
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button class="btn btn-secondary" onclick="exportProgress()">⬇️ Exportieren</button>
+      <button class="btn btn-secondary" onclick="document.getElementById('import-file').click()">⬆️ Importieren</button>
+      <input type="file" id="import-file" accept="application/json,.json" style="display:none" onchange="importProgress(this.files[0])">
+    </div>
+  </div>
+</div>
+
+<!-- Profile screen -->
+<div id="profile-screen" style="display:none; width:100%; max-width:680px; padding:32px 24px">
+  <div class="hero" style="margin-bottom:28px">
+    <div style="font-size:3rem;margin-bottom:12px">👤</div>
+    <div class="hero-title">Wer lernt gerade?</div>
+    <div class="hero-sub">Lege ein Profil an oder wähle ein bestehendes. Dein Fortschritt wird pro Profil getrennt in diesem Browser gespeichert.</div>
+  </div>
+  <div id="profile-list" style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px"></div>
+  <div class="card" style="padding:20px">
+    <div class="section-label">Neues Profil</div>
+    <div style="display:flex;gap:10px">
+      <input type="text" id="new-profile-name" class="profile-input" placeholder="Dein Name oder Kürzel" maxlength="24"
+             onkeydown="if(event.key==='Enter')createProfile(document.getElementById('new-profile-name').value)">
+      <button class="btn btn-primary" style="width:auto;padding:14px 24px" onclick="createProfile(document.getElementById('new-profile-name').value)">Anlegen</button>
+    </div>
+  </div>
+</div>
+
+<!-- Quiz screen -->
+<div id="quiz-screen" style="display:none; width:100%; max-width:680px; margin:0 auto">
+  <div class="progress-bar-wrap">
+    <div style="display:flex;align-items:center;gap:12px">
+      <button class="quiz-home-btn" onclick="showHome()" title="Zur Übersicht" aria-label="Zur Übersicht">←</button>
+      <div class="progress-bar-track" style="flex:1"><div class="progress-bar-fill" id="progress-fill" style="width:0%"></div></div>
+    </div>
+    <div class="progress-label"><span id="q-current">1</span> / <span id="q-total">10</span></div>
+  </div>
+  <main>
+    <div class="card" id="question-card">
+      <div class="question-meta" id="q-meta"></div>
+      <div class="question-text" id="q-text"></div>
+      <div class="question-hint" id="q-hint" style="display:none"></div>
+      <div id="q-body"></div>
+    </div>
+    <div class="feedback" id="feedback">
+      <div class="feedback-title" id="fb-title"></div>
+      <div class="feedback-body" id="fb-body"></div>
+    </div>
+    <div class="action-row">
+      <button class="btn btn-secondary" onclick="skipQuestion()">Überspringen</button>
+      <button class="btn btn-check" id="check-btn" onclick="checkAnswer()" disabled>Prüfen</button>
+    </div>
+  </main>
+</div>
+
+<!-- Finish screen -->
+<div id="finish-screen" style="display:none; width:100%; max-width:680px; padding:24px">
+  <div class="card finish-screen">
+    <div class="finish-emoji" id="finish-emoji">🎉</div>
+    <div class="finish-title" id="finish-title">Session abgeschlossen!</div>
+    <div class="finish-sub" id="finish-sub"></div>
+    <div class="finish-stats" id="finish-stats"></div>
+    <button class="btn btn-primary" onclick="showHome()" style="max-width:280px;margin:0 auto;display:block">← Zurück zur Übersicht</button>
+  </div>
+</div>
+
+<!-- Onboarding-Overlay (einmalig beim ersten Start) -->
+<div id="onboarding" class="overlay" style="display:none">
+  <div class="overlay-card">
+    <h2>👋 Willkommen!</h2>
+    <div class="onboard-item">
+      <span class="oi-emoji">🔁</span>
+      <span class="oi-text"><b>Täglich wiederholen:</b> Die App merkt sich, was sitzt. Schwierige Karten kommen früher wieder, sichere seltener — über „Heute wiederholen".</span>
+    </div>
+    <div class="onboard-item">
+      <span class="oi-emoji">⌨️</span>
+      <span class="oi-text"><b>Echtes R:</b> Code-Aufgaben werden in echtem R geprüft (auch gleichwertige Lösungen zählen). Du kannst <b>sofort starten</b> — die R-Engine lädt im Hintergrund.</span>
+    </div>
+    <div class="onboard-item">
+      <span class="oi-emoji">📇</span>
+      <span class="oi-text"><b>Kein Druck:</b> Mit „Karteikarten durchblättern" kannst du Fragen + Lösungen ohne Wertung durchsehen — ideal kurz vor der Prüfung.</span>
+    </div>
+    <button class="btn btn-primary" onclick="closeOnboarding()">Los geht's →</button>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════
+//  QUESTION BANK
+// ════════════════════════════════════════════════════
+// ── Handbuch-Verlinkung ──
+// Wenn das Handbuch unter einer festen URL liegt (Netlify), hier eintragen,
+// z.B. "https://mein-handbuch.netlify.app". Bleibt es leer, werden relative
+// Links erzeugt (funktioniert, wenn App und Buch im selben Verzeichnis liegen).
+const HANDBOOK_BASE = '';
+
+const TOPICS = [
+  { id: 'r-basics',    name: 'R-Grundlagen',        icon: '🔧', chapter: { slug:'02-r-grundlagen', label:'R-Grundlagen' } },
+  { id: 'datentypen',  name: 'Datentypen',          icon: '🔤', chapter: { slug:'03-datentypen',    label:'Datentypen und -strukturen' } },
+  { id: 'vektoren',    name: 'Vektoren',            icon: '📋', chapter: { slug:'03-datentypen',    label:'Datentypen und -strukturen' } },
+  { id: 'dataframes',  name: 'Data Frames',         icon: '📊', chapter: { slug:'04-dataframes',    label:'Data Frames' } },
+  { id: 'lists',       name: 'Listen',              icon: '📦', chapter: { slug:'05-lists',         label:'Listen' } },
+  { id: 'import',      name: 'Import & Export',     icon: '📂', chapter: { slug:'06-import-export', label:'Import & Export' } },
+  { id: 'viz',         name: 'Visualisierung',      icon: '📈', chapter: { slug:'07-visualisierung',label:'Datenvisualisierung' } },
+  { id: 'strings',     name: 'Textfunktionen',      icon: '✂️', chapter: { slug:'08-textfunktionen',label:'Textfunktionen' } },
+  { id: 'regex',       name: 'Reguläre Ausdrücke',  icon: '🔍', chapter: { slug:'09-regex',         label:'Reguläre Ausdrücke' } },
+  { id: 'bow',         name: 'Bag of Words',        icon: '🛍️', chapter: { slug:'11-bow',           label:'Bag of Words' } },
+  { id: 'dfm',         name: 'DFM & Quanteda',      icon: '🔢', chapter: { slug:'12-dfm',           label:'Document-Feature-Matrix' } },
+  { id: 'advanced',    name: 'Ähnlichkeit & Pruning',icon:'🧮', chapter: { slug:'13-simil',         label:'Ähnlichkeit & Pruning' } },
+  { id: 'clustering',  name: 'Text Clustering',     icon: '🧩', chapter: { slug:'16-clustering',    label:'Text Clustering' } },
+];
+
+function chapterHref(topicId) {
+  const t = TOPICS.find(x => x.id === topicId);
+  if (!t || !t.chapter) return null;
+  const base = HANDBOOK_BASE.replace(/\/$/, '');
+  return (base ? base + '/' : '') + t.chapter.slug + '.html';
+}
+
+// type: 'mc' | 'code' | 'fill'
+// For 'code': answer is array of acceptable answers (normalized)
+// For 'fill': template with ___ placeholder, answer is what goes in blank
+// For 'mc': options array, correct index (0-based)
+const QUESTIONS = [
+
+  // ── R-Grundlagen ──────────────────────────────────
+  { topic:'r-basics', type:'mc',
+    q:'Was ist der Unterschied zwischen R und RStudio?',
+    options:['R ist die Sprache/Berechnung, RStudio ist die Entwicklungsumgebung','RStudio ist die Sprache, R ist das Interface','Sie sind dasselbe Programm, verschiedene Versionen','R läuft nur auf Mac, RStudio nur auf Windows'],
+    correct:0,
+    explain:'R = Motor (Sprache), RStudio = Cockpit (GUI). RStudio ruft R automatisch im Hintergrund auf.' },
+
+  { topic:'r-basics', type:'mc',
+    q:'Mit welchem Tastenkürzel führen Sie in RStudio die aktuelle Zeile aus?',
+    options:['Strg + Enter','Strg + S','F5','Alt + R'],
+    correct:0,
+    explain:'<code>Strg + Enter</code> (Windows/Linux) bzw. <code>Cmd + Enter</code> (Mac) führt die aktuelle Zeile oder Auswahl aus.' },
+
+  { topic:'r-basics', type:'code',
+    q:'Weisen Sie der Variable <code>name</code> den Text <code>"Anna"</code> zu.',
+    hint:'Verwenden Sie den Pfeiloperator <code><-</code>.',
+    answers:['name <- "Anna"', 'name<-"Anna"', 'name <- \'Anna\''],
+    explain:'Der Pfeiloperator <code><-</code> ist die R-Konvention für Zuweisungen. <code>=</code> funktioniert auch, ist aber weniger idiomatisch.' },
+
+  { topic:'r-basics', type:'mc',
+    q:'Was gibt <code>(2 + 3) * 4</code> in R zurück?',
+    options:['14','20','24','10'],
+    correct:1,
+    explain:'Klammern setzen die Berechnungsreihenfolge. <code>(2+3)=5</code>, dann <code>5*4=20</code>.' },
+
+  { topic:'r-basics', type:'fill',
+    q:'Schreiben Sie den fehlenden Operator: <code>mein_wert ___ 42</code> — Zuweisung des Werts 42.',
+    template:'mein_wert ___ 42',
+    answers:['<-', '='],
+    explain:'<code><-</code> ist der bevorzugte Zuweisungsoperator in R. <code>=</code> geht auch, ist aber weniger verbreitet.' },
+
+  { topic:'r-basics', type:'mc',
+    q:'Wozu dient die Funktion <code>print()</code>?',
+    options:['Druckt das Skript auf einem Drucker','Zeigt einen Wert explizit in der Konsole an','Speichert eine Variable dauerhaft','Erstellt ein Diagramm'],
+    correct:1,
+    explain:'<code>print()</code> gibt Werte explizit aus — nötig z.B. innerhalb von Schleifen, wo automatische Ausgabe nicht funktioniert.' },
+
+  { topic:'r-basics', type:'code',
+    q:'Kommentieren Sie die folgende Zeile aus: <code>x <- 5</code>',
+    hint:'Kommentare beginnen in R mit einem bestimmten Zeichen.',
+    answers:['# x <- 5', '#x <- 5'],
+    explain:'In R beginnen Kommentare mit <code>#</code>. Alles rechts davon wird ignoriert.' },
+
+  { topic:'r-basics', type:'mc',
+    q:'In welchem RStudio-Bereich erscheinen Grafiken?',
+    options:['Konsole (unten links)','Skriptfeld (oben links)','Environment (oben rechts)','Plots-Tab (unten rechts)'],
+    correct:3,
+    explain:'Der Bereich unten rechts enthält die Tabs Files, Plots, Packages und Help.' },
+
+  // ── Datentypen ────────────────────────────────────
+  { topic:'datentypen', type:'mc',
+    q:'Was gibt <code>class("42")</code> zurück?',
+    options:['"numeric"','"character"','"integer"','"logical"'],
+    correct:1,
+    explain:'Anführungszeichen machen aus allem einen <code>character</code>-String — auch aus einer Zahl.' },
+
+  { topic:'datentypen', type:'mc',
+    q:'Was ist der Rückgabewert von <code>5 == 3</code>?',
+    options:['5','3','TRUE','FALSE'],
+    correct:3,
+    explain:'<code>==</code> ist der Vergleichsoperator. Da 5 nicht gleich 3 ist, gibt R <code>FALSE</code> zurück.' },
+
+  { topic:'datentypen', type:'fill',
+    q:'Logische Werte in R heißen <code>___</code> und <code>FALSE</code>.',
+    template:'___ und FALSE',
+    answers:['TRUE', 'T'],
+    explain:'Boolesche Werte sind in R <code>TRUE</code> und <code>FALSE</code> (immer großgeschrieben). Abkürzungen <code>T</code>/<code>F</code> gehen auch, sind aber weniger lesbar.' },
+
+  { topic:'datentypen', type:'mc',
+    q:'Was ergibt <code>sum(c(TRUE, FALSE, TRUE, TRUE))</code>?',
+    options:['2','3','4','Fehlermeldung'],
+    correct:1,
+    explain:'<code>TRUE = 1</code> und <code>FALSE = 0</code>. <code>sum()</code> addiert: 1+0+1+1 = 3.' },
+
+  { topic:'datentypen', type:'code',
+    q:'Prüfen Sie mit einer Funktion, welcher Datentyp in <code>x</code> gespeichert ist.',
+    hint:'Es gibt zwei mögliche Funktionen: <code>class()</code> oder <code>typeof()</code>.',
+    answers:['class(x)', 'typeof(x)'],
+    explain:'<code>class(x)</code> gibt den übergeordneten Typ zurück (z.B. "numeric", "character", "logical"), <code>typeof()</code> den internen Speichertyp.' },
+
+  { topic:'datentypen', type:'mc',
+    q:'Was passiert, wenn Sie <code>as.numeric("hello")</code> aufrufen?',
+    options:['Fehlermeldung und Abbruch','Gibt 0 zurück','Gibt NA zurück (mit Warnung)','Gibt "hello" unverändert zurück'],
+    correct:2,
+    explain:'R gibt <code>NA</code> zurück, weil "hello" nicht in eine Zahl umgewandelt werden kann, und zeigt eine Warnung (<code>NAs introduced by coercion</code>).' },
+
+  { topic:'datentypen', type:'mc',
+    q:'Welcher Operator prüft auf Ungleichheit?',
+    options:['<>','!=','=/=','~='],
+    correct:1,
+    explain:'In R steht <code>!=</code> für "ungleich". <code>!TRUE</code> ergibt <code>FALSE</code> — das <code>!</code> ist allgemein der Negationsoperator.' },
+
+  // ── Vektoren ──────────────────────────────────────
+  { topic:'vektoren', type:'code',
+    q:'Erstellen Sie einen Vektor mit den Zahlen 1, 2 und 3.',
+    hint:'Die Kombinationsfunktion in R ist <code>c()</code>.',
+    answers:['c(1, 2, 3)', 'c(1,2,3)'],
+    explain:'<code>c()</code> (combine) erstellt Vektoren. Alle Elemente müssen vom gleichen Typ sein — sonst wandelt R sie automatisch um (coercion).' },
+
+  { topic:'vektoren', type:'mc',
+    q:'Was ist das Ergebnis von <code>c(1, 2, 3)[2]</code>?',
+    options:['1','2','3','Fehlermeldung'],
+    correct:1,
+    explain:'R-Indexierung beginnt bei 1 (nicht bei 0 wie in vielen anderen Sprachen). <code>[2]</code> gibt das zweite Element zurück: 2.' },
+
+  { topic:'vektoren', type:'fill',
+    q:'Um den Vektor <code>x <- c(10, 20, 30)</code> zu filtern auf alle Werte > 15, schreiben Sie: <code>x[x ___ 15]</code>',
+    template:'x[x ___ 15]',
+    answers:['>'],
+    explain:'Logische Indizierung: <code>x > 15</code> gibt einen Vektor aus TRUE/FALSE zurück. <code>x[...]</code> wählt nur die TRUE-Positionen aus.' },
+
+  { topic:'vektoren', type:'code',
+    q:'Geben Sie die Länge (Anzahl der Elemente) des Vektors <code>v</code> aus.',
+    hint:'Es gibt eine Funktion, die die Länge eines Vektors zurückgibt.',
+    answers:['length(v)'],
+    explain:'<code>length()</code> gibt die Anzahl der Elemente in einem Vektor zurück.' },
+
+  { topic:'vektoren', type:'mc',
+    q:'Was passiert bei <code>c(1, 2, "drei")</code>?',
+    options:['Fehlermeldung','Gibt einen Vektor mit 2 Zahlen und 1 Text zurück','R wandelt 1 und 2 in Strings um: "1" "2" "drei"','Gibt NA für "drei" zurück'],
+    correct:2,
+    explain:'R-Vektoren sind homogen — alle Elemente müssen gleichen Typ haben. R wandelt alles in den "flexibelsten" Typ um (coercion): hier character.' },
+
+  { topic:'vektoren', type:'code',
+    q:'Erstellen Sie eine ganzzahlige Sequenz von 1 bis 10.',
+    hint:'Es gibt zwei Wege: den <code>:</code>-Operator oder <code>seq()</code>.',
+    answers:['1:10', 'seq(1, 10)', 'seq(1,10)', 'seq(from=1, to=10)'],
+    explain:'<code>1:10</code> ist die einfachste Schreibweise. <code>seq(1, 10)</code> ist flexibler (z.B. <code>seq(1, 10, by=2)</code> für Schrittweite).' },
+
+  // ── Data Frames ───────────────────────────────────
+  { topic:'dataframes', type:'mc',
+    q:'Was ist ein Data Frame in R?',
+    options:['Ein einzelner Vektor mit Namen','Eine zweidimensionale Tabelle — Spalten sind benannte Vektoren gleicher Länge','Eine Liste ohne Typeneinschränkung','Ein Matrix-Objekt ausschließlich für Zahlen'],
+    correct:1,
+    explain:'Data Frames sind die wichtigste Datenstruktur für Tabellenanalysen: jede Spalte ist ein Vektor, alle Spalten haben gleiche Länge.' },
+
+  { topic:'dataframes', type:'fill',
+    q:'Zugriff auf Spalte <code>name</code> im Data Frame <code>df</code>: <code>df___name</code>',
+    template:'df___name',
+    answers:['$'],
+    explain:'Der <code>$</code>-Operator gibt eine benannte Spalte als Vektor zurück: <code>df$name</code>.' },
+
+  { topic:'dataframes', type:'code',
+    q:'Zeigen Sie die ersten 6 Zeilen des Data Frames <code>df</code> an.',
+    hint:'Es gibt eine Funktion, die standardmäßig 6 Zeilen anzeigt.',
+    answers:['head(df)', 'head(df, 6)', 'head(df,6)'],
+    explain:'<code>head(df)</code> zeigt die ersten 6 Zeilen. <code>tail(df)</code> die letzten 6. Die Zahl lässt sich anpassen: <code>head(df, 10)</code>.' },
+
+  { topic:'dataframes', type:'mc',
+    q:'Was gibt <code>df[3, ]</code> zurück?',
+    options:['Die dritte Spalte von df','Den Wert in Zeile 3, Spalte 1','Die gesamte dritte Zeile als Data Frame','Alle Spalten außer der dritten'],
+    correct:2,
+    explain:'Syntax: <code>df[ZEILE, SPALTE]</code>. Leere Spaltenangabe = alle Spalten. <code>df[3, ]</code> gibt also die gesamte Zeile 3 zurück.' },
+
+  { topic:'dataframes', type:'code',
+    q:'Geben Sie die Anzahl der Zeilen des Data Frames <code>df</code> aus.',
+    hint:'Eine spezifische Funktion für Zeilen eines Data Frames.',
+    answers:['nrow(df)', 'dim(df)[1]'],
+    explain:'<code>nrow(df)</code> gibt die Zeilenanzahl, <code>ncol(df)</code> die Spaltenanzahl. <code>dim(df)</code> gibt beides als Vektor <code>c(Zeilen, Spalten)</code>.' },
+
+  { topic:'dataframes', type:'mc',
+    q:'Wie filtern Sie alle Zeilen in <code>df</code>, bei denen die Spalte <code>alter</code> größer als 30 ist?',
+    options:['df$alter > 30','df[alter > 30]','df[df$alter > 30, ]','df[, df$alter > 30]'],
+    correct:2,
+    explain:'<code>df[df$alter > 30, ]</code>: Der Ausdruck vor dem Komma filtert Zeilen, das leere Feld nach dem Komma behält alle Spalten.' },
+
+  { topic:'dataframes', type:'code',
+    q:'Erstellen Sie einen Data Frame mit zwei Spalten: <code>stadt</code> und <code>einwohner</code>.',
+    hint:'Die Funktion heißt <code>data.frame()</code>.',
+    answers:['data.frame(stadt = ..., einwohner = ...)', 'data.frame(stadt=..., einwohner=...)'],
+    explain:'<code>data.frame(spalte1 = vektor1, spalte2 = vektor2)</code> — die Spaltennamen werden als Argumente übergeben.',
+    isStructural: true },
+
+  // ── Import & Export ───────────────────────────────
+  { topic:'import', type:'code',
+    q:'Laden Sie eine CSV-Datei namens <code>daten.csv</code> in das Objekt <code>df</code>.',
+    hint:'Die BaseR-Funktion für CSV-Import lautet <code>read.csv()</code>.',
+    answers:['df <- read.csv("daten.csv")', "df <- read.csv('daten.csv')", 'df<-read.csv("daten.csv")'],
+    explain:'<code>read.csv()</code> ist der Standard für kommagetrennte Dateien. Für Semikolon-Trennung (deutsches Excel) nutzen Sie <code>read.csv2()</code>.' },
+
+  { topic:'import', type:'mc',
+    q:'Was macht <code>readRDS("datei.rds")</code>?',
+    options:['Liest eine CSV-Datei ein','Liest ein R-eigenes Binärformat ein und gibt das gespeicherte Objekt zurück','Liest eine Excel-Datei ein','Liest mehrere Dateien gleichzeitig'],
+    correct:1,
+    explain:'RDS ist ein R-eigenes Speicherformat. Vorteil: Datentypen bleiben erhalten. <code>saveRDS(obj, "datei.rds")</code> speichert, <code>readRDS()</code> lädt.' },
+
+  { topic:'import', type:'fill',
+    q:'Wie heißt das tidyverse-Paket für sauberen CSV-Import (mit der Funktion <code>read_csv()</code>)?',
+    template:'Paket: ___',
+    answers:['readr'],
+    explain:'Das <code>readr</code>-Paket aus dem tidyverse bietet <code>read_csv()</code> (mit Underscore!): schneller, gibt Tibbles zurück, erkennt Typen besser.' },
+
+  { topic:'import', type:'code',
+    q:'Speichern Sie den Data Frame <code>df</code> als CSV-Datei <code>ergebnis.csv</code>.',
+    hint:'Die Gegenfunktion zu <code>read.csv()</code>.',
+    answers:['write.csv(df, "ergebnis.csv")', "write.csv(df, 'ergebnis.csv')", 'write.csv(df,"ergebnis.csv")'],
+    explain:'<code>write.csv()</code> exportiert einen Data Frame. Oft nützlich: <code>row.names = FALSE</code> verhindert, dass R Zeilennummern als extra Spalte schreibt.' },
+
+  // ── Textfunktionen ────────────────────────────────
+  { topic:'strings', type:'code',
+    q:'Geben Sie die Anzahl der Zeichen im String <code>s</code> aus.',
+    hint:'Nicht <code>length()</code>! Die richtige Funktion zählt Zeichen, nicht Elemente.',
+    answers:['nchar(s)', 'str_length(s)'],
+    explain:'<code>nchar(s)</code> (BaseR) oder <code>str_length(s)</code> aus dem <code>stringr</code>-Paket zählen die Zeichenanzahl eines Strings.' },
+
+  { topic:'strings', type:'mc',
+    q:'Was gibt <code>toupper("hallo")</code> zurück?',
+    options:['"hallo"','"Hallo"','"HALLO"','Fehlermeldung'],
+    correct:2,
+    explain:'<code>toupper()</code> wandelt alle Buchstaben in Großbuchstaben um. Das Gegenstück ist <code>tolower()</code>.' },
+
+  { topic:'strings', type:'code',
+    q:'Ersetzen Sie in der Variable <code>text</code> alle Vorkommen von <code>"Corona"</code> durch <code>"Covid"</code>.',
+    hint:'Für Alle Vorkommen gibt es eine Funktion mit "g" am Anfang.',
+    answers:['gsub("Corona", "Covid", text)', 'gsub("Corona","Covid",text)', 'str_replace_all(text, "Corona", "Covid")'],
+    explain:'<code>gsub()</code> ersetzt alle Treffer. <code>sub()</code> ersetzt nur den ersten. <code>stringr</code>-Äquivalente: <code>str_replace_all()</code> und <code>str_replace()</code>.' },
+
+  { topic:'strings', type:'mc',
+    q:'Was gibt <code>grep("trump", headlines, value = TRUE)</code> zurück?',
+    options:['Die Positionen (Indizes) der Treffer','Die Strings, die "trump" enthalten','TRUE/FALSE für jeden String','Die Anzahl der Treffer'],
+    correct:1,
+    explain:'<code>value = TRUE</code> gibt die passenden Strings zurück. Ohne dieses Argument gibt <code>grep()</code> nur die Indizes (Positionen) zurück.' },
+
+  { topic:'strings', type:'fill',
+    q:'<code>paste("Text", "Mining", ___ = "_")</code> ergibt <code>"Text_Mining"</code>.',
+    template:'paste("Text", "Mining", ___ = "_")',
+    answers:['sep'],
+    explain:'Das Argument <code>sep</code> bestimmt das Trennzeichen bei <code>paste()</code>. Standard ist ein Leerzeichen. <code>paste0()</code> klebt ohne Trennzeichen zusammen.' },
+
+  { topic:'strings', type:'code',
+    q:'Zerlegen Sie den String <code>"Text Mining mit R"</code> an Leerzeichen in einzelne Wörter.',
+    hint:'Die Funktion heißt <code>strsplit()</code>, das Muster ist ein Leerzeichen.',
+    answers:['strsplit("Text Mining mit R", " ")', 'strsplit("Text Mining mit R"," ")', 'str_split("Text Mining mit R", " ")'],
+    explain:'<code>strsplit()</code> gibt eine Liste zurück. <code>[[1]]</code> holt den Vektor aus der Liste: <code>strsplit(...)[[1]]</code>.' },
+
+  // ── Reguläre Ausdrücke ────────────────────────────
+  { topic:'regex', type:'mc',
+    q:'Was bedeutet <code>\\\\d</code> in einem regulären Ausdruck?',
+    options:['Ein Dezimalpunkt','Eine beliebige Ziffer (0–9)','Ein Leerzeichen','Das Wortende'],
+    correct:1,
+    explain:'<code>\\\\d</code> (in R als String: <code>"\\\\d"</code>) trifft jede Ziffer. <code>\\\\D</code> trifft alles außer Ziffern. <code>\\\\w</code> trifft Wortzeichen (Buchstaben, Ziffern, Underscore).' },
+
+  { topic:'regex', type:'fill',
+    q:'Regex-Muster für "beginnt mit Trump": <code>___Trump</code>',
+    template:'___Trump',
+    answers:['^'],
+    explain:'<code>^</code> verankert das Muster am Anfang. <code>$</code> verankert am Ende. <code>^Trump$</code> = exakt nur das Wort "Trump".' },
+
+  { topic:'regex', type:'mc',
+    q:'Was findet <code>grep("Covid|Corona", texte)</code>?',
+    options:['Nur Strings mit "Covid|Corona" wörtlich','Strings die "Covid" oder "Corona" enthalten','Strings die "Covid" und "Corona" enthalten','Gibt einen Fehler zurück'],
+    correct:1,
+    explain:'Das <code>|</code> im Regex ist das logische ODER. <code>"Covid|Corona"</code> trifft beide Varianten in einem Aufruf.' },
+
+  { topic:'regex', type:'code',
+    q:'Finden Sie alle Strings in <code>texte</code>, die mit einer Ziffer beginnen. Geben Sie die Positionen zurück.',
+    hint:'Verwenden Sie <code>grep()</code> mit einem Regex für "beginnt mit Ziffer".',
+    answers:['grep("^\\\\d", texte)', 'grep("^[0-9]", texte)', 'grep("^\\d", texte)'],
+    explain:'<code>^\\\\d</code> = beginnt mit einer Ziffer. Alternative: <code>^[0-9]</code>. In R braucht das Backslash-Double-Escape: <code>"^\\\\d"</code>.' },
+
+  { topic:'regex', type:'mc',
+    q:'Was bedeutet <code>+</code> in einem Regex?',
+    options:['Genau ein Zeichen','Null oder ein Zeichen','Ein oder mehr Vorkommen des vorigen Zeichens','Null oder mehr Vorkommen'],
+    correct:2,
+    explain:'Quantifizierer: <code>+</code> = 1 oder mehr, <code>*</code> = 0 oder mehr, <code>?</code> = 0 oder 1, <code>{n}</code> = genau n-mal.' },
+
+  { topic:'regex', type:'mc',
+    q:'Welches Regex-Muster zerlegt Fließtext optimal in Tokens — es trifft Leerzeichen, Satzzeichen und andere Trennzeichen?',
+    options:['<code>\\\\w+</code> — ein oder mehr Wortzeichen','<code>\\\\W+</code> — ein oder mehr Nicht-Wortzeichen','<code>\\\\d+</code> — ein oder mehr Ziffern','<code>\\\\s</code> — genau ein Leerzeichen'],
+    correct:1,
+    explain:'<code>\\\\W+</code> trifft ein oder mehr Nicht-Wortzeichen (Leerzeichen, Satzzeichen, Zeilenumbrüche). Als Trennmuster in <code>strsplit(text, "\\\\W+")</code> zerlegt es Fließtext zuverlässig in einzelne Wörter.' },
+
+  // ── Bag of Words ──────────────────────────────────
+  { topic:'bow', type:'mc',
+    q:'Was besagt die Bag-of-Words-Annahme?',
+    options:['Die Reihenfolge der Wörter ist entscheidend für die Bedeutung','Wörter müssen in einem Wörterbuch vorhanden sein','Nur die Häufigkeit der Wörter zählt — Reihenfolge und Kontext werden ignoriert','Text-Analyse ist nur mit trainierten Modellen möglich'],
+    correct:2,
+    explain:'BOW behandelt Texte als "Wörtertüten": Reihenfolge und Kontext spielen keine Rolle, nur welche Wörter wie oft vorkommen.' },
+
+  { topic:'bow', type:'mc',
+    q:'Was ist Tokenisierung?',
+    options:['Texte in Dateien umwandeln','Einen langen String in einzelne Wort-Elemente zerlegen','Häufige Wörter entfernen','Groß-/Kleinschreibung vereinheitlichen'],
+    correct:1,
+    explain:'Tokenisierung = Zerlegung von Fließtext in Token (meist Wörter). Voraussetzung für alle BOW-Methoden.' },
+
+  { topic:'bow', type:'code',
+    q:'Zerlegen Sie <code>text</code> in Tokens — trennen Sie an allen Nicht-Wortzeichen.',
+    hint:'Verwenden Sie <code>strsplit()</code> mit dem Regex <code>"\\\\W+"</code>.',
+    answers:['strsplit(text, "\\\\W+")', 'strsplit(text,"\\\\W+")'],
+    explain:'<code>strsplit(text, "\\\\W+")</code> zerlegt an Leerzeichen, Satzzeichen usw. Ergebnis ist eine Liste — <code>[[1]]</code> gibt den Vektor zurück.' },
+
+  { topic:'bow', type:'mc',
+    q:'Was sind Stopwörter?',
+    options:['Wörter, die Sätze beenden','Sehr häufige, inhaltlich wenig aussagekräftige Wörter (der, die, und, …)','Falsch geschriebene Wörter','Wörter, die nicht im Wörterbuch stehen'],
+    correct:1,
+    explain:'Stopwörter (Artikel, Präpositionen, Konjunktionen) werden bei Analysen oft entfernt, weil sie in fast allen Texten gleich häufig sind und keine thematische Information tragen.' },
+
+  { topic:'bow', type:'fill',
+    q:'Wörter auf ihren Wortstamm reduzieren heißt ___.',
+    template:'Wörter auf ihren Wortstamm reduzieren heißt ___.',
+    answers:['Stemming', 'stemming'],
+    explain:'Stemming reduziert Wörter auf ihren Stamm ("läuft" → "lauf"). Lemmatisierung ist ähnlich, aber grammatisch korrekt ("läuft" → "laufen").' },
+
+  // ── DFM & Quanteda ────────────────────────────────
+  { topic:'dfm', type:'mc',
+    q:'Was bedeutet DFM?',
+    options:['Document Feature Matrix','Data Frame Method','Digital Frequency Model','Document Finding Mechanism'],
+    correct:0,
+    explain:'DFM = Document Feature Matrix (auch: Document-Term Matrix, DTM). Zeilen = Dokumente, Spalten = Wörter/Features, Zellen = Häufigkeiten.' },
+
+  { topic:'dfm', type:'mc',
+    q:'Mit welchem Paket arbeiten wir hauptsächlich für DFM-Analysen in diesem Seminar?',
+    options:['tidytext','tm','quanteda','text'],
+    correct:2,
+    explain:'<code>quanteda</code> ist ein mächtiges R-Paket für Text-Mining: erstellt Corpora, Tokens und DFMs mit klarer Pipeline.' },
+
+  { topic:'dfm', type:'code',
+    q:'Installieren und laden Sie das Paket <code>quanteda</code>.',
+    hint:'Zwei Schritte: installieren (einmalig) und laden.',
+    answers:['install.packages("quanteda")\nlibrary(quanteda)', 'library(quanteda)'],
+    explain:'<code>install.packages()</code> installiert einmalig, <code>library()</code> lädt das Paket in die aktuelle Session.' },
+
+  { topic:'dfm', type:'mc',
+    q:'Was ist der erste Schritt in einer quanteda-Pipeline?',
+    options:['dfm() aufrufen','Ein Corpus-Objekt erstellen','Tokens entfernen','Die DFM visualisieren'],
+    correct:1,
+    explain:'quanteda-Pipeline: 1. <code>corpus()</code> → 2. <code>tokens()</code> → 3. <code>dfm()</code>. Das Corpus-Objekt hält die Rohtexte mit Metadaten.' },
+
+  { topic:'dfm', type:'fill',
+    q:'In einer DFM steht jede Zeile für ein ___ (jede Spalte dagegen für ein Wort/Feature).',
+    template:'Jede Zeile = ein ___',
+    answers:['Dokument', 'Dokumente'],
+    explain:'Dokument-Feature-Matrix: jede Zeile = ein Dokument, jede Spalte = ein Wort/Feature, jede Zelle = Häufigkeit des Wortes im Dokument.' },
+
+  // ── Ähnlichkeit & Pruning ─────────────────────────
+  { topic:'advanced', type:'mc',
+    q:'Was macht "Pruning" in einer DFM?',
+    options:['Neue Dokumente hinzufügen','Sehr seltene oder sehr häufige Features entfernen, um die Matrix zu verkleinern','Die DFM sortieren','Texte auf ihren Stamm reduzieren'],
+    correct:1,
+    explain:'Pruning = "Beschneiden". Wörter, die extrem selten (Rauschen) oder extrem häufig (uninformativ) sind, werden aus der DFM entfernt.' },
+
+  { topic:'advanced', type:'mc',
+    q:'Was misst Cosinus-Ähnlichkeit?',
+    options:['Den euklidischen Abstand zweier Textvektoren','Den Winkel zwischen zwei Dokumentvektoren als Maß für inhaltliche Ähnlichkeit','Die Anzahl gemeinsamer Wörter','Die Länge der Dokumente'],
+    correct:1,
+    explain:'Cosinus-Ähnlichkeit = cos(Winkel) zwischen zwei Vektoren. Wert 1 = identisch, 0 = keine gemeinsamen Wörter, -1 = komplett entgegengesetzt.' },
+
+  { topic:'advanced', type:'mc',
+    q:'Warum normalisiert man eine DFM (z.B. TF-IDF)?',
+    options:['Um sie optisch ansprechender zu machen','Um längere Dokumente nicht zu benachteiligen und seltene, informative Wörter zu gewichten','Um Duplikate zu entfernen','Um die Matrix zu transponieren'],
+    correct:1,
+    explain:'TF-IDF (Term Frequency–Inverse Document Frequency) gewichtet Wörter: häufig in einem Dokument, selten in allen anderen = hoher Wert. Korrigiert auch Längenverzerrungen.' },
+
+  { topic:'advanced', type:'fill',
+    q:'TF-IDF steht für: Term Frequency – ___ Document Frequency.',
+    template:'TF-IDF: Term Frequency – ___ Document Frequency',
+    answers:['Inverse', 'inverse'],
+    explain:'IDF (Inverse Document Frequency) penalisiert Wörter, die in vielen Dokumenten vorkommen (z.B. Stopwörter). TF-IDF = TF × IDF.' },
+
+  // ── Zusätzliche feste Fragen ──────────────────────
+  { topic:'r-basics', type:'code',
+    q:'Installieren Sie das Paket <code>stringr</code>.',
+    hint:'Die Funktion erwartet den Paketnamen als String.',
+    answers:['install.packages("stringr")', "install.packages('stringr')"],
+    explain:'<code>install.packages()</code> lädt ein Paket einmalig aus dem CRAN-Repository herunter. Danach laden Sie es pro Session mit <code>library()</code>.' },
+
+  { topic:'r-basics', type:'mc',
+    q:'Wie rufen Sie die Hilfeseite zur Funktion <code>mean</code> auf?',
+    options:['<code>help mean</code>','<code>?mean</code>','<code>info(mean)</code>','<code>mean.help()</code>'],
+    correct:1,
+    explain:'<code>?mean</code> (oder <code>help(mean)</code>) öffnet die Dokumentation im Help-Tab unten rechts.' },
+
+  { topic:'datentypen', type:'mc',
+    q:'Was ergibt <code>10 %% 3</code> in R?',
+    options:['3','1','0.33','30'],
+    correct:1,
+    explain:'<code>%%</code> ist der Modulo-Operator (Rest der Division). 10 geteilt durch 3 ist 3 Rest <code>1</code>.' },
+
+  { topic:'datentypen', type:'mc',
+    q:'Was ergibt <code>as.character(42)</code>?',
+    options:['42','"42"','TRUE','NA'],
+    correct:1,
+    explain:'<code>as.character()</code> wandelt die Zahl in den Text <code>"42"</code> um — danach ist kein Rechnen mehr möglich.' },
+
+  { topic:'vektoren', type:'mc',
+    q:'Was gibt <code>rev(c(1, 2, 3))</code> zurück?',
+    options:['1 2 3','3 2 1','6','c(3)'],
+    correct:1,
+    explain:'<code>rev()</code> kehrt die Reihenfolge eines Vektors um: aus <code>1 2 3</code> wird <code>3 2 1</code>.' },
+
+  { topic:'vektoren', type:'code',
+    q:'Berechnen Sie den Mittelwert des Vektors <code>v</code>.',
+    hint:'Eine kurze BaseR-Funktion für den Durchschnitt.',
+    answers:['mean(v)'],
+    explain:'<code>mean(v)</code> gibt den arithmetischen Mittelwert zurück. Verwandte Funktionen: <code>median()</code>, <code>sum()</code>, <code>max()</code>, <code>min()</code>.' },
+
+  { topic:'dataframes', type:'mc',
+    q:'Welche Funktion gibt einen kompakten Überblick über Struktur und Typen eines Data Frames?',
+    options:['<code>str(df)</code>','<code>print(df)</code>','<code>plot(df)</code>','<code>length(df)</code>'],
+    correct:0,
+    explain:'<code>str(df)</code> zeigt für jede Spalte den Typ und die ersten Werte — ideal für einen schnellen Überblick. <code>summary(df)</code> gibt zusätzlich Kennzahlen.' },
+
+  { topic:'dataframes', type:'code',
+    q:'Geben Sie die Spaltennamen des Data Frames <code>df</code> aus.',
+    hint:'Zwei mögliche Funktionen — eine davon funktioniert auch bei Listen.',
+    answers:['colnames(df)', 'names(df)'],
+    explain:'<code>colnames(df)</code> und <code>names(df)</code> geben beide die Spaltennamen zurück. <code>rownames(df)</code> liefert die Zeilennamen.' },
+
+  { topic:'import', type:'mc',
+    q:'Worin unterscheidet sich <code>read.csv2()</code> von <code>read.csv()</code>?',
+    options:['Es liest Excel-Dateien','Es erwartet Semikolon als Trenner und Komma als Dezimalzeichen (deutsches Format)','Es ist doppelt so schnell','Es liest nur die zweite Spalte'],
+    correct:1,
+    explain:'<code>read.csv2()</code> ist auf das deutsche/europäische CSV-Format eingestellt: <code>;</code> trennt Spalten, <code>,</code> ist das Dezimalzeichen.' },
+
+  { topic:'import', type:'mc',
+    q:'Mit welchem Paket lesen Sie Excel-Dateien (.xlsx) in R ein?',
+    options:['<code>readr</code>','<code>readxl</code>','<code>excelR</code>','<code>xlsread</code>'],
+    correct:1,
+    explain:'Das Paket <code>readxl</code> bietet <code>read_excel("datei.xlsx")</code> zum direkten Einlesen von Excel-Dateien — ohne Umweg über CSV.' },
+
+  { topic:'strings', type:'mc',
+    q:'Was gibt <code>substr("Mining", 1, 3)</code> zurück?',
+    options:['"Min"','"ing"','"Mining"','"M"'],
+    correct:0,
+    explain:'<code>substr(x, start, stop)</code> schneidet die Zeichen von Position 1 bis 3 aus: <code>"Min"</code>.' },
+
+  { topic:'strings', type:'mc',
+    q:'Was gibt <code>str_detect("Inflationsrate", "flation")</code> zurück?',
+    options:['Die Position des Treffers','<code>TRUE</code>','Den Treffer als Text','Die Anzahl der Treffer'],
+    correct:1,
+    explain:'<code>str_detect()</code> aus <code>stringr</code> prüft, <em>ob</em> ein Muster vorkommt, und gibt <code>TRUE</code>/<code>FALSE</code> zurück — nützlich zum Filtern.' },
+
+  { topic:'regex', type:'mc',
+    q:'Was bedeutet der Punkt <code>.</code> in einem regulären Ausdruck?',
+    options:['Genau einen Punkt','Ein beliebiges einzelnes Zeichen','Das Satzende','Eine Ziffer'],
+    correct:1,
+    explain:'Der Punkt <code>.</code> ist ein Platzhalter für <em>ein beliebiges</em> Zeichen. Einen echten Punkt matchen Sie mit <code>\\\\.</code> (maskiert).' },
+
+  { topic:'regex', type:'mc',
+    q:'Wie matchen Sie in einem Regex einen <em>echten</em> Punkt (z.B. in einer Dateiendung)?',
+    options:['<code>.</code>','<code>\\\\.</code>','<code>[.]?</code>','<code>punkt</code>'],
+    correct:1,
+    explain:'Da <code>.</code> ein Sonderzeichen ist, maskiert man es mit Backslash: <code>\\\\.</code> trifft genau einen Punkt. (Alternative: <code>[.]</code>.)' },
+
+  { topic:'bow', type:'mc',
+    q:'Was ist ein <em>n-Gramm</em>?',
+    options:['Ein Wort mit n Buchstaben','Eine zusammenhängende Folge von n aufeinanderfolgenden Wörtern','Die n häufigsten Wörter','Ein Dokument mit n Sätzen'],
+    correct:1,
+    explain:'Ein n-Gramm erfasst Wortfolgen: ein Bigramm (n=2) wie „künstliche Intelligenz" bewahrt etwas Kontext, den reines BOW (Unigramme) verliert.' },
+
+  { topic:'bow', type:'mc',
+    q:'Warum wandelt man Texte vor einer BOW-Analyse oft in Kleinbuchstaben um (lowercasing)?',
+    options:['Damit der Code schneller läuft','Damit „Haus" und „haus" als dasselbe Wort gezählt werden','Weil R keine Großbuchstaben verarbeiten kann','Um Rechtschreibfehler zu korrigieren'],
+    correct:1,
+    explain:'Ohne Lowercasing zählt R <code>"Inflation"</code> und <code>"inflation"</code> als zwei verschiedene Features. Vereinheitlichen verhindert diese künstliche Aufspaltung.' },
+
+  { topic:'dfm', type:'mc',
+    q:'Was liefert <code>topfeatures(meine_dfm)</code>?',
+    options:['Die längsten Dokumente','Die häufigsten Wörter (Features) der DFM','Eine Grafik der DFM','Die leeren Spalten'],
+    correct:1,
+    explain:'<code>topfeatures()</code> gibt die häufigsten Features einer DFM zurück — ein schneller Weg, die dominanten Begriffe eines Korpus zu sehen.' },
+
+  { topic:'advanced', type:'mc',
+    q:'In welchem Wertebereich liegt die Cosinus-Ähnlichkeit bei DFMs mit nicht-negativen Häufigkeiten?',
+    options:['−1 bis 1','0 bis 1','0 bis 100','beliebig groß'],
+    correct:1,
+    explain:'Da Worthäufigkeiten nie negativ sind, liegt die Cosinus-Ähnlichkeit zwischen 0 (keine gemeinsamen Wörter) und 1 (identische Wortverteilung).' },
+
+  // ── Listen ────────────────────────────────────────
+  { topic:'lists', type:'mc',
+    q:'Was unterscheidet eine Liste von einem Vektor?',
+    options:['Eine Liste ist immer kürzer','Eine Liste kann Elemente verschiedener Typen und Längen enthalten','Eine Liste darf nur Zahlen enthalten','Es gibt keinen Unterschied'],
+    correct:1,
+    explain:'Listen sind die flexibelste Datenstruktur: Jedes Element kann ein beliebiges Objekt sein (Zahl, Text, Vektor, Data Frame, wieder eine Liste) — anders als der typgleiche Vektor.' },
+
+  { topic:'lists', type:'mc',
+    q:'Was ist der Unterschied zwischen <code>liste[1]</code> und <code>liste[[1]]</code>?',
+    options:['Kein Unterschied','<code>[1]</code> gibt den Inhalt, <code>[[1]]</code> die Verpackung','<code>[1]</code> gibt eine einelementige Liste (Verpackung), <code>[[1]]</code> den eigentlichen Inhalt','<code>[[1]]</code> funktioniert nur bei Vektoren'],
+    correct:2,
+    explain:'Eselsbrücke Adventskalender: <code>[1]</code> ist das Türchen mit dem eingewickelten Päckchen, <code>[[1]]</code> packt es aus und gibt das Objekt selbst.' },
+
+  { topic:'lists', type:'mc',
+    q:'Mit welcher Schreibweise können Sie direkt rechnen: <code>my_list[1] + 2</code> oder <code>my_list[[1]] + 2</code>?',
+    options:['<code>my_list[1] + 2</code>','<code>my_list[[1]] + 2</code>','Beide','Keine von beiden'],
+    correct:1,
+    explain:'<code>[[1]]</code> liefert den entpackten Vektor, mit dem gerechnet werden kann. <code>[1]</code> bleibt eine Liste → <code>my_list[1] + 2</code> wirft einen Fehler.' },
+
+  { topic:'lists', type:'fill',
+    q:'Der <code>$</code>-Operator ist äquivalent zu <code>[[ ]]</code> mit Namen: <code>my_list___vec</code>',
+    template:'my_list___vec',
+    answers:['$'],
+    explain:'<code>my_list$vec</code> ist identisch mit <code>my_list[["vec"]]</code> — die in der Praxis lesbarste und häufigste Schreibweise.' },
+
+  { topic:'lists', type:'mc',
+    q:'Wie entfernen Sie das dritte Element aus <code>my_list</code>?',
+    options:['<code>my_list[3] <- 0</code>','<code>my_list[[3]] <- NULL</code> oder <code>my_list[-3]</code>','<code>remove(my_list, 3)</code>','<code>delete my_list[3]</code>'],
+    correct:1,
+    explain:'<code>my_list[[3]] <- NULL</code> oder negativer Index <code>my_list[-3]</code> entfernen das Element dauerhaft; nachfolgende Elemente rücken auf.' },
+
+  { topic:'lists', type:'code',
+    q:'Greifen Sie auf das benannte Element <code>vec</code> der Liste <code>my_list</code> zu (entpackt).',
+    hint:'Lesbarste Schreibweise nutzt den <code>$</code>-Operator.',
+    answers:['my_list$vec', 'my_list[["vec"]]'],
+    explain:'<code>my_list$vec</code> oder <code>my_list[["vec"]]</code> geben den Inhalt des Elements zurück — nicht die einelementige Listen-Verpackung.' },
+
+  { topic:'lists', type:'mc',
+    q:'Was gibt <code>length(my_list[4])</code> zurück, wenn das 4. Element eine Liste mit 2 Elementen ist?',
+    options:['2','1','4','NULL'],
+    correct:1,
+    explain:'<code>my_list[4]</code> ist eine <em>einelementige</em> Liste (die Verpackung) → Länge 1. Erst <code>length(my_list[[4]])</code> entpackt und gibt 2.' },
+
+  // ── Visualisierung ────────────────────────────────
+  { topic:'viz', type:'mc',
+    q:'Wofür steht der Name <code>ggplot2</code>?',
+    options:['Good Graphics Plot','Grammar of Graphics','General Graph Plotting','Grouped Geometry Plot'],
+    correct:1,
+    explain:'„Grammar of Graphics": Grafiken werden aus unabhängigen Elementen (Daten, Aesthetics, Geometrien) zusammengesetzt, verbunden mit <code>+</code>.' },
+
+  { topic:'viz', type:'mc',
+    q:'Wozu dient <code>aes()</code> in einem ggplot-Aufruf?',
+    options:['Es speichert den Plot','Es legt fest, welche Variablen auf welche Achse (bzw. Farbe etc.) abgebildet werden','Es installiert das Package','Es bestimmt die Bildgröße'],
+    correct:1,
+    explain:'<code>aes()</code> (Aesthetics) verknüpft Daten-Variablen mit visuellen Eigenschaften: <code>aes(x = date, y = trump)</code>.' },
+
+  { topic:'viz', type:'mc',
+    q:'Womit werden die Ebenen einer ggplot-Grafik verbunden?',
+    options:['mit <code>%>%</code>','mit <code>+</code>','mit <code>&</code>','mit <code>,</code>'],
+    correct:1,
+    explain:'Die Grammar of Graphics setzt Ebenen mit <code>+</code> zusammen: <code>ggplot(...) + geom_line() + labs(...)</code>.' },
+
+  { topic:'viz', type:'mc',
+    q:'Was steuert das Argument <code>alpha</code> in einer Geometrie?',
+    options:['Die Farbe','Die Transparenz (0 = unsichtbar, 1 = undurchsichtig)','Die Linienbreite','Die Achsenbeschriftung'],
+    correct:1,
+    explain:'<code>alpha</code> regelt die Deckkraft — nützlich, um sich überlappende Flächen (<code>geom_area</code>) sichtbar zu halten.' },
+
+  { topic:'viz', type:'fill',
+    q:'Einen fertigen Plot speichern Sie mit der Funktion <code>___()</code>.',
+    template:'___("mein_plot.png")',
+    answers:['ggsave'],
+    explain:'<code>ggsave("mein_plot.png")</code> exportiert den zuletzt angezeigten Plot; das Format wird am Dateisuffix erkannt (z.B. PDF für Print, PNG fürs Web).' },
+
+  { topic:'viz', type:'mc',
+    q:'Was bewirkt die Schreibweise <code>ggplot2::ggplot()</code>?',
+    options:['Sie installiert ggplot2','Sie ruft die Funktion direkt aus dem Package auf, ohne vorheriges <code>library()</code>','Sie erstellt zwei Plots','Sie ist ein Syntaxfehler'],
+    correct:1,
+    explain:'<code>package::funktion()</code> ruft eine Funktion gezielt aus einem Package auf — praktisch, wenn zwei Packages gleichnamige Funktionen haben.' },
+
+  { topic:'viz', type:'mc',
+    q:'Welches Datenformat erwartet <code>wordcloud2</code>?',
+    options:['Einen einzelnen Textstring','Eine Tabelle mit zwei Spalten: Wort und Häufigkeit','Eine DFM','Einen benannten Vektor'],
+    correct:1,
+    explain:'Wordclouds brauchen einen Data Frame mit den Spalten <code>word</code> und <code>freq</code> — Wörter werden proportional zur Häufigkeit dargestellt.' },
+
+  { topic:'viz', type:'mc',
+    q:'Sie möchten eine Wordcloud als Bilddatei exportieren. Welches Package eignet sich?',
+    options:['<code>wordcloud2</code> (interaktiv)','<code>ggwordcloud</code> (ggplot-kompatibel, mit <code>ggsave()</code>)','Beide gleich gut','Wordclouds lassen sich nie exportieren'],
+    correct:1,
+    explain:'<code>wordcloud2</code> ist interaktiv, aber schwer exportierbar. <code>ggwordcloud2()</code> erzeugt einen ggplot-Plot, den <code>ggsave()</code> direkt speichern kann.' },
+
+  { topic:'viz', type:'code',
+    q:'Laden Sie das Package <code>ggplot2</code> in die aktuelle Session.',
+    hint:'Nicht installieren — nur einladen.',
+    answers:['library(ggplot2)', 'require(ggplot2)'],
+    explain:'<code>library(ggplot2)</code> lädt das (bereits installierte) Package. Installiert wird nur einmalig mit <code>install.packages("ggplot2")</code>.' },
+
+  // ── Text Clustering ───────────────────────────────
+  { topic:'clustering', type:'mc',
+    q:'Was kennzeichnet Text Clustering als <em>unüberwachtes</em> Verfahren?',
+    options:['Es braucht vorab definierte Kategorien oder Suchbegriffe','Es teilt Dokumente automatisch in Gruppen ein, ohne vorher zu wissen, welche Strukturen darin stecken','Es funktioniert nur mit gelabelten Trainingsdaten','Es überwacht die Texteingabe der Nutzer'],
+    correct:1,
+    explain:'Anders als Ähnlichkeits- oder Wörterbuch-Verfahren braucht Clustering kein Vorwissen: Es findet selbstständig Gruppen ähnlicher Dokumente.' },
+
+  { topic:'clustering', type:'mc',
+    q:'Was ist das Ziel von Text Clustering?',
+    options:['Jedes Wort einem Thema zuordnen','Ähnliche Dokumente in denselben Cluster, unterschiedliche in verschiedene Cluster','Die häufigsten Wörter zählen','Texte in eine numerische Form bringen'],
+    correct:1,
+    explain:'Das Ergebnis ist eine Partition: Jedes Dokument wird genau einem Cluster zugeordnet — ähnliche zusammen, unähnliche getrennt.' },
+
+  { topic:'clustering', type:'mc',
+    q:'Was muss beim <code>k-means</code>-Algorithmus <em>vorab</em> festgelegt werden?',
+    options:['Die Anzahl der Cluster k','Die Namen der Cluster','Die Anzahl der Iterationen, sonst läuft er ewig','Die Distanz zwischen den Dokumenten'],
+    correct:0,
+    explain:'k-means teilt n Dokumente in k Cluster — das k ist eine zentrale Entscheidung, die der Mensch vorab treffen muss.' },
+
+  { topic:'clustering', type:'mc',
+    q:'Was passiert im <em>Aktualisierungsschritt</em> von k-means?',
+    options:['Jedes Dokument wird dem nächsten Zentrum zugewiesen','Das neue Cluster-Zentrum wird als Mittelwert aller zugewiesenen Dokumente berechnet','Die Anzahl k wird erhöht','Zufällige Startzentren werden gesetzt'],
+    correct:1,
+    explain:'Schritt 3: Das neue Zentrum (Centroid) ist der spaltenweise Mittelwert aller Dokumente, die dem Cluster zugewiesen wurden. Danach folgt die nächste Zuweisungsrunde.' },
+
+  { topic:'clustering', type:'mc',
+    q:'Wann stoppt der k-means-Algorithmus?',
+    options:['Nach genau 10 Durchläufen','Wenn sich die Cluster-Zentren nicht mehr wesentlich ändern (Konvergenz) oder <code>iter.max</code> erreicht ist','Sobald jedes Cluster gleich viele Dokumente hat','Wenn alle Distanzen 0 sind'],
+    correct:1,
+    explain:'Zuweisung und Aktualisierung wiederholen sich, bis Konvergenz eintritt oder die maximale Iterationszahl <code>iter.max</code> erreicht ist.' },
+
+  { topic:'clustering', type:'mc',
+    q:'Wozu dient <code>set.seed()</code> vor einem k-means-Aufruf?',
+    options:['Es beschleunigt die Berechnung','Es macht das Ergebnis reproduzierbar, da die Startzentren zufällig initialisiert werden','Es legt die Anzahl der Cluster fest','Es entfernt seltene Wörter'],
+    correct:1,
+    explain:'k-means startet mit zufälligen Zentren. <code>set.seed()</code> fixiert den Zufallsgenerator → jeder mit demselben Seed erhält dasselbe Clustering.' },
+
+  { topic:'clustering', type:'code',
+    q:'Berechnen Sie k-means auf der DFM <code>mat</code> mit <code>3</code> Clustern.',
+    hint:'Funktion <code>kmeans()</code>, Argument <code>centers</code>.',
+    answers:['kmeans(mat, centers = 3)', 'kmeans(mat, 3)'],
+    explain:'<code>kmeans(mat, centers = 3)</code> teilt die Dokumente in 3 Cluster. Mit <code>iter.max</code> erhöht man bei Bedarf die maximale Iterationszahl (z.B. <code>iter.max = 500</code>).' },
+
+  { topic:'clustering', type:'mc',
+    q:'Welches Distanzmaß verwendet <code>kmeans()</code>?',
+    options:['Cosinus-Ähnlichkeit','Euklidische Distanz','Jaccard-Index','Manhattan-Distanz'],
+    correct:1,
+    explain:'kmeans misst Ähnlichkeit über die euklidische Distanz — nicht die Cosinus-Ähnlichkeit aus der Ähnlichkeitsanalyse. Das hat Folgen für die Dokumentlänge.' },
+
+  { topic:'clustering', type:'mc',
+    q:'Warum gewichtet man die DFM oft mit <code>dfm_tfidf()</code>, bevor man <code>kmeans()</code> anwendet?',
+    options:['Um die Berechnung zu beschleunigen','Weil kmeans über die euklidische Distanz sonst eher nach Dokumentlänge als nach Thema clustert','Weil kmeans nur mit TF-IDF funktioniert','Um die Anzahl der Cluster zu bestimmen'],
+    correct:1,
+    explain:'Auf Rohzählungen haben lange Dokumente größere Distanzen → Cluster nach Länge statt Thema. <code>dfm_tfidf()</code> oder <code>dfm_weight(scheme = "prop")</code> rücken den Inhalt in den Vordergrund.' },
+
+  { topic:'clustering', type:'mc',
+    q:'Was enthält <code>clusters$cluster</code>?',
+    options:['Die Cluster-Zentren als Matrix','Für jedes Dokument die Nummer des zugewiesenen Clusters','Die Anzahl der Cluster','Die wichtigsten Wörter pro Cluster'],
+    correct:1,
+    explain:'<code>clusters$cluster</code> ist ein benannter Vektor: pro Dokument steht darin, in welchem Cluster es gelandet ist. Z.B. <code>corp[clusters$cluster == 2]</code> zeigt alle Dokumente von Cluster 2.' },
+
+  { topic:'clustering', type:'mc',
+    q:'Was steckt in <code>clusters$centers</code>?',
+    options:['Ein Vektor mit der Cluster-Zuordnung je Dokument','Eine Matrix mit einer Zeile pro Cluster und einer Spalte pro Feature — sie zeigt, wie stark jedes Wort ein Cluster prägt','Die Anzahl der Iterationen','Die Liste der entfernten Stoppwörter'],
+    correct:1,
+    explain:'Über <code>sort(centers[2, ], decreasing = TRUE)[1:20]</code> sieht man die prägendsten Wörter von Cluster 2 — ideal für eine charakterisierende Wordcloud.' },
+
+  { topic:'clustering', type:'code',
+    q:'Zerlegen Sie das Corpus <code>corp</code> in einzelne Sätze (für das Clustern eines langen Texts).',
+    hint:'Funktion <code>corpus_reshape()</code>, Argument <code>to</code>.',
+    answers:['corpus_reshape(corp, to = "sentences")', 'corpus_reshape(corp, "sentences")'],
+    explain:'<code>corpus_reshape(corp, to = "sentences")</code> macht aus jedem Satz ein eigenes Dokument — nötig, wenn man die Struktur <em>innerhalb</em> eines einzelnen langen Texts clustern will.' },
+
+  { topic:'clustering', type:'mc',
+    q:'Wie wählt man die Anzahl der Cluster <code>k</code>?',
+    options:['Es gibt eine Formel, die das optimale k berechnet','Es ist eine begründete Ermessensentscheidung — abhängig von Forschungsfrage, Korpusgröße und den bisherigen Ergebnissen (iterativ)','Immer k = 10','k ergibt sich automatisch aus der DFM'],
+    correct:1,
+    explain:'Keine Formel liefert das richtige k. Man wählt einen plausiblen Startwert, bewertet die Cluster qualitativ und justiert nach — „human in the loop".' },
+
+  { topic:'clustering', type:'fill',
+    q:'k-means ist ein <em>un___tes</em> Verfahren — es braucht keine vorab definierten Kategorien.',
+    template:'un___tes Verfahren',
+    answers:['überwach', 'ueberwach'],
+    explain:'Unüberwacht (unsupervised): Das Verfahren findet Strukturen ohne gelabelte Trainingsdaten oder vorgegebene Kategorien.' },
+
+  { topic:'clustering', type:'mc',
+    q:'Was bedeutet das Prinzip „human in the loop" beim Clustering?',
+    options:['Der Algorithmus läuft vollautomatisch ohne Zutun','Der Mensch bewertet die Ergebnisse, begründet seine Wahl und justiert die Parameter in einer Schleife nach','Mehrere Personen müssen das Ergebnis bestätigen','Die Cluster werden von Hand zugewiesen'],
+    correct:1,
+    explain:'Clustering ist explorativ: Man trifft eine begründete Anfangsentscheidung, betrachtet die Cluster, lernt daraus und passt k/Pruning an — Ausprobieren, Bewerten, Anpassen.' },
+
+];
+
+// ════════════════════════════════════════════════════
+//  STATE & PROFILE-VERWALTUNG (lokal, ohne Server)
+//  Mehrere Personen können sich an einem Browser ein eigenes Namens-
+//  Profil anlegen — jeder Fortschritt liegt getrennt im localStorage.
+// ════════════════════════════════════════════════════
+const PROFILES_KEY = 'rmining_profiles_v1';
+const LEGACY_KEY = 'rmining_v2';
+
+let state = blankState();        // Fortschritt des aktiven Profils
+let activeProfile = null;        // Name des aktiven Profils
+
+function blankState() {
+  return { xp: 0, streak: 0, lastDate: null, scores: {}, goal: 20, todayDate: null, todayCount: 0 };
+}
+
+function loadProfiles() {
+  try { return JSON.parse(localStorage.getItem(PROFILES_KEY)) || { current: null, profiles: {} }; }
+  catch { return { current: null, profiles: {} }; }
+}
+function saveProfiles(p) {
+  try { localStorage.setItem(PROFILES_KEY, JSON.stringify(p)); } catch {}
+}
+
+// Speichert den aktuellen state im aktiven Profil zurück.
+function saveState() {
+  if (!activeProfile) return;
+  const p = loadProfiles();
+  p.current = activeProfile;
+  p.profiles[activeProfile] = state;
+  saveProfiles(p);
+}
+
+// Tagescheck für den Streak.
+function checkStreakDay() {
+  const today = new Date().toDateString();
+  if (state.todayDate !== today) { state.todayDate = today; state.todayCount = 0; } // Tagesziel zurücksetzen
+  if (state.lastDate !== today) {
+    const yesterday = new Date(Date.now() - 86400000).toDateString();
+    if (state.lastDate !== yesterday) state.streak = 0;
+    state.lastDate = today;
+  }
+  saveState();
+}
+
+function activateProfile(name) {
+  const p = loadProfiles();
+  if (!p.profiles[name]) p.profiles[name] = blankState();
+  p.current = name;
+  saveProfiles(p);
+  activeProfile = name;
+  state = Object.assign(blankState(), p.profiles[name]);
+  if (!state.scores) state.scores = {};
+  checkStreakDay();
+  saveState();
+  updateProfileChip();
+}
+
+function createProfile(name) {
+  name = (name || '').trim();
+  if (!name) return;
+  const p = loadProfiles();
+  if (p.profiles[name]) { activateProfile(name); showHome(); return; } // existiert → einfach wählen
+  p.profiles[name] = blankState();
+  saveProfiles(p);
+  activateProfile(name);
+  showHome();
+}
+
+function deleteProfile(name) {
+  if (!confirm(`Profil „${name}" mit allem Fortschritt wirklich löschen?`)) return;
+  const p = loadProfiles();
+  delete p.profiles[name];
+  if (p.current === name) p.current = null;
+  saveProfiles(p);
+  if (activeProfile === name) { activeProfile = null; state = blankState(); }
+  showProfiles();
+}
+
+function updateProfileChip() {
+  const chip = document.getElementById('profile-chip');
+  if (chip) chip.querySelector('#profile-name').textContent = activeProfile || '—';
+}
+
+// Einmalige Migration: alter Einzel-Fortschritt → Standardprofil.
+function migrateLegacy() {
+  const p = loadProfiles();
+  if (Object.keys(p.profiles).length > 0) return;
+  const old = localStorage.getItem(LEGACY_KEY);
+  if (old) {
+    try {
+      const s = JSON.parse(old);
+      p.profiles['Mein Lernstand'] = Object.assign(blankState(), s);
+      p.current = 'Mein Lernstand';
+      saveProfiles(p);
+    } catch {}
+  }
+}
+
+// ════════════════════════════════════════════════════
+//  SPACED REPETITION — Leitner-System mit Fälligkeitsdatum
+//  Jede Karte hat eine "box" (0–6). Richtig → eine Box höher (längeres
+//  Intervall bis zur nächsten Fälligkeit), falsch → eine Box runter.
+// ════════════════════════════════════════════════════
+const LEITNER_DAYS = [0, 1, 2, 4, 8, 16, 30]; // Intervall pro Box in Tagen
+const DAY_MS = 86400000;
+
+function scheduleCard(id, correct) {
+  const s = state.scores[id];
+  s.box = correct ? Math.min((s.box || 0) + 1, LEITNER_DAYS.length - 1)
+                  : Math.max((s.box || 0) - 1, 0);
+  s.due = Date.now() + LEITNER_DAYS[s.box] * DAY_MS;
+}
+
+// Karte ist fällig, wenn sie nie bearbeitet wurde oder ihr Fälligkeitsdatum
+// erreicht ist.
+function isNew(id)  { const s = state.scores[id]; return !s || !s.attempts; }
+function isDue(id)  { const s = state.scores[id]; return !!s && s.attempts > 0 && (s.due || 0) <= Date.now(); }
+function isWeak(id) { const s = state.scores[id]; return !!s && s.attempts > 0 && (s.correct / s.attempts) < 0.6; }
+
+function allCards()  { return poolFor('all'); }
+function dueCards()  { return allCards().filter(c => isDue(c.id)); }
+function newCards()  { return allCards().filter(c => isNew(c.id)); }
+function weakCards() { return allCards().filter(c => isWeak(c.id)); }
+
+function getWeight(qId) {
+  const s = state.scores[qId];
+  if (!s || !s.attempts) return 6; // ungesehen = hohes Gewicht
+  const ratio = s.correct / Math.max(1, s.attempts);
+  const boxPart = Math.max(1, 6 - (s.box || 0));   // niedrige Box → hoch
+  const ratioPart = Math.round((1 - ratio) * 4);   // viele Fehler → hoch
+  return Math.max(1, boxPart + ratioPart);
+}
+
+function weightedSample(questions, n) {
+  const pool = [];
+  questions.forEach((q, i) => {
+    const w = getWeight(q.id);
+    for (let j = 0; j < w; j++) pool.push(i);
+  });
+  // Fisher-Yates shuffle on pool, pick first n unique
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  const seen = new Set();
+  const result = [];
+  for (const idx of pool) {
+    if (!seen.has(idx)) { seen.add(idx); result.push(questions[idx]); }
+    if (result.length >= n) break;
+  }
+  // If not enough, fill with remaining
+  questions.forEach(q => { if (!seen.has(questions.indexOf(q)) && result.length < n) result.push(q); });
+  return result;
+}
+
+// Assign IDs to questions
+QUESTIONS.forEach((q, i) => { q.id = `q${i}`; });
+
+// ════════════════════════════════════════════════════
+//  GENERATOR ENGINE — prozedurale Zufallsfragen
+//  Jede Vorlage erzeugt bei jedem Aufruf eine neue Frage
+//  mit zufälligen Werten → effektiv unendlich viele Varianten.
+// ════════════════════════════════════════════════════
+const rint = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+const rpick = arr => arr[Math.floor(Math.random() * arr.length)];
+function rshuffle(a) {
+  a = a.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+function mcFrom(correctLabel, distractors) {
+  const opts = rshuffle([correctLabel, ...distractors]);
+  return { options: opts, correct: opts.indexOf(correctLabel) };
+}
+function mcStr(correct, candidates) {
+  const uniq = [];
+  for (const c of candidates) {
+    if (c !== correct && !uniq.includes(c)) uniq.push(c);
+    if (uniq.length >= 3) break;
+  }
+  return mcFrom(correct, uniq);
+}
+function numDistractors(correct, count) {
+  const set = new Set();
+  const deltas = [-3, -2, -1, 1, 2, 3, 4, 5];
+  let guard = 0;
+  while (set.size < count && guard++ < 60) {
+    const d = correct + rpick(deltas);
+    if (d !== correct && d >= 0) set.add(d);
+  }
+  let n = Math.max(0, correct - 1);
+  while (set.size < count) { if (n !== correct) set.add(n); n++; }
+  return [...set].slice(0, count);
+}
+function mcNum(correct, extra) {
+  const ds = (extra || []).filter(x => x !== correct);
+  const need = Math.max(0, 3 - ds.length);
+  const more = numDistractors(correct, need + 3).filter(x => !ds.includes(x)).slice(0, need);
+  return mcFrom(String(correct), [...ds, ...more].slice(0, 3).map(String));
+}
+
+const GENERATORS = [
+
+  // ── R-Grundlagen ──
+  { topic:'r-basics', type:'mc', make() {
+    const a = rint(2,9), b = rint(2,9), c = rint(2,9);
+    const val = (a + b) * c, mistake = a + b * c;
+    const { options, correct } = mcNum(val, [mistake]);
+    return { type:'mc',
+      q:`Was gibt R für <code>(${a} + ${b}) * ${c}</code> zurück?`,
+      options, correct,
+      explain:`Klammern zuerst: <code>(${a}+${b})=${a+b}</code>, dann <code>×${c}=${val}</code>. Ohne Klammern (Punkt vor Strich) käme ${mistake} heraus.` };
+  }},
+
+  { topic:'r-basics', type:'code', make() {
+    const name = rpick(['ergebnis','wert','x','zahl','summe','score','n']);
+    const val = rint(1,99);
+    return { type:'code',
+      q:`Weisen Sie der Variable <code>${name}</code> den Wert <code>${val}</code> zu.`,
+      hint:'Pfeiloperator <code>&lt;-</code> verwenden.',
+      answers:[`${name} <- ${val}`, `${name} = ${val}`],
+      explain:`<code>${name} &lt;- ${val}</code> speichert den Wert ${val} in der Variable <code>${name}</code>.` };
+  }},
+
+  // ── Datentypen ──
+  { topic:'datentypen', type:'mc', make() {
+    const cases = [
+      { lit: String(rint(1,500)), cls:'numeric' },
+      { lit: rint(1,40) + '.' + rint(1,9), cls:'numeric' },
+      { lit: '"' + rpick(['Hallo','Text','Mining','42','Wort','R']) + '"', cls:'character' },
+      { lit: rpick(['TRUE','FALSE']), cls:'logical' }
+    ];
+    const c = rpick(cases);
+    const { options, correct } = mcFrom('"' + c.cls + '"',
+      ['"numeric"','"character"','"logical"'].filter(x => x !== '"' + c.cls + '"'));
+    return { type:'mc',
+      q:`Was gibt <code>class(${c.lit})</code> zurück?`,
+      options, correct,
+      explain: c.cls === 'character'
+        ? 'Alles in Anführungszeichen ist ein <code>character</code> — auch Ziffern.'
+        : c.cls === 'logical'
+          ? '<code>TRUE</code>/<code>FALSE</code> sind vom Typ <code>logical</code>.'
+          : 'Zahlen (mit oder ohne Dezimalstelle) sind standardmäßig <code>numeric</code>.' };
+  }},
+
+  { topic:'datentypen', type:'mc', make() {
+    const a = rint(1,20), b = rint(1,20);
+    const ops = [['==', a===b], ['!=', a!==b], ['<', a<b], ['>', a>b], ['<=', a<=b], ['>=', a>=b]];
+    const [op, res] = rpick(ops);
+    const { options, correct } = mcFrom(res ? 'TRUE' : 'FALSE', [res ? 'FALSE' : 'TRUE']);
+    return { type:'mc',
+      q:`Was gibt <code>${a} ${op} ${b}</code> zurück?`,
+      options, correct,
+      explain:`Der Vergleich <code>${a} ${op} ${b}</code> ergibt <code>${res ? 'TRUE' : 'FALSE'}</code>.` };
+  }},
+
+  { topic:'datentypen', type:'mc', make() {
+    const n = rint(3,5);
+    const vals = Array.from({length:n}, () => rpick([true,false]));
+    if (!vals.some(v => v)) vals[0] = true;
+    const s = vals.filter(v => v).length;
+    const { options, correct } = mcNum(s);
+    return { type:'mc',
+      q:`Was ergibt <code>sum(c(${vals.map(v => v ? 'TRUE':'FALSE').join(', ')}))</code>?`,
+      options, correct,
+      explain:`<code>TRUE</code> zählt als 1, <code>FALSE</code> als 0. Hier ${s}× TRUE → Summe ${s}.` };
+  }},
+
+  // ── Vektoren ──
+  { topic:'vektoren', type:'mc', make() {
+    const n = rint(3,5);
+    const v = Array.from({length:n}, () => rint(1,30));
+    const i = rint(1,n), val = v[i-1];
+    const { options, correct } = mcNum(val, [v[i % n]]);
+    return { type:'mc',
+      q:`Was gibt <code>c(${v.join(', ')})[${i}]</code> zurück?`,
+      options, correct,
+      explain:`R zählt ab 1. Das ${i}. Element von <code>c(${v.join(', ')})</code> ist <code>${val}</code>.` };
+  }},
+
+  { topic:'vektoren', type:'mc', make() {
+    const n = rint(4,6);
+    const v = Array.from({length:n}, () => rint(1,40));
+    const t = rint(10,30), op = rpick(['>','<','>=','<=']);
+    const keep = v.filter(x => op==='>' ? x>t : op==='<' ? x<t : op==='>=' ? x>=t : x<=t);
+    const comp = v.filter(x => !keep.includes(x));
+    const fmt = arr => `c(${arr.join(', ')})`;
+    const corr = fmt(keep);
+    const { options, correct } = mcStr(corr, [fmt(comp), fmt(v), fmt([...keep].reverse()), fmt(rshuffle(v).slice(0, Math.max(1, keep.length)))]);
+    return { type:'mc',
+      q:`Gegeben <code>x &lt;- c(${v.join(', ')})</code>. Was liefert <code>x[x ${op} ${t}]</code>?`,
+      options, correct,
+      explain:`Logische Indizierung behält nur die Elemente, für die <code>x ${op} ${t}</code> TRUE ist → <code>${corr}</code>.` };
+  }},
+
+  { topic:'vektoren', type:'code', make() {
+    const a = rint(1,5), b = rint(8,15);
+    return { type:'code',
+      q:`Erzeugen Sie eine fortlaufende Ganzzahl-Sequenz von <code>${a}</code> bis <code>${b}</code>.`,
+      hint:'Die kürzeste Schreibweise nutzt den <code>:</code>-Operator.',
+      answers:[`${a}:${b}`, `seq(${a}, ${b})`, `seq(${a},${b})`],
+      explain:`<code>${a}:${b}</code> erzeugt alle Ganzzahlen von ${a} bis ${b}. Alternative: <code>seq(${a}, ${b})</code>.` };
+  }},
+
+  // ── Textfunktionen ──
+  { topic:'strings', type:'mc', make() {
+    const w = rpick(['Mining','Inflation','Tagesschau','Korpus','Vektor','Analyse','Regex','Quanteda','Sentiment']);
+    const { options, correct } = mcNum(w.length);
+    return { type:'mc',
+      q:`Wie viele Zeichen gibt <code>nchar("${w}")</code> zurück?`,
+      options, correct,
+      explain:`"${w}" besteht aus ${w.length} Zeichen.` };
+  }},
+
+  { topic:'strings', type:'mc', make() {
+    const w = rpick(['mining','text','corona','analyse','regex','wort']);
+    const { options, correct } = mcFrom('"' + w.toUpperCase() + '"',
+      ['"' + w + '"', '"' + w[0].toUpperCase() + w.slice(1) + '"']);
+    return { type:'mc',
+      q:`Was gibt <code>toupper("${w}")</code> zurück?`,
+      options, correct,
+      explain:`<code>toupper()</code> macht alle Buchstaben groß → <code>"${w.toUpperCase()}"</code>.` };
+  }},
+
+  { topic:'strings', type:'code', make() {
+    const p = rpick([['Corona','Covid'],['USA','Amerika'],['Auto','Fahrzeug'],['alt','neu']]);
+    return { type:'code',
+      q:`Ersetzen Sie in <code>text</code> alle Vorkommen von <code>"${p[0]}"</code> durch <code>"${p[1]}"</code>.`,
+      hint:'Funktion mit „g" am Anfang ersetzt alle Treffer.',
+      answers:[`gsub("${p[0]}", "${p[1]}", text)`, `str_replace_all(text, "${p[0]}", "${p[1]}")`],
+      explain:`<code>gsub("${p[0]}", "${p[1]}", text)</code> ersetzt alle Treffer. <code>sub()</code> nur den ersten.` };
+  }},
+
+  // ── Reguläre Ausdrücke ──
+  { topic:'regex', type:'mc', make() {
+    const map = [
+      ['\\\\d','eine beliebige Ziffer (0–9)'],
+      ['\\\\D','jedes Zeichen außer einer Ziffer'],
+      ['\\\\w','ein Wortzeichen (Buchstabe, Ziffer, Unterstrich)'],
+      ['\\\\W','ein Nicht-Wortzeichen (z.B. Leer- oder Satzzeichen)'],
+      ['\\\\s','ein Leerraumzeichen (Space, Tab, Zeilenumbruch)'],
+      ['^','Verankerung am Anfang des Strings'],
+      ['$','Verankerung am Ende des Strings'],
+      ['+','ein oder mehr Vorkommen des vorigen Zeichens'],
+      ['*','null oder mehr Vorkommen des vorigen Zeichens'],
+      ['?','null oder ein Vorkommen des vorigen Zeichens']
+    ];
+    const item = rpick(map);
+    const others = rshuffle(map.filter(m => m[0] !== item[0])).slice(0,3).map(m => m[1]);
+    const { options, correct } = mcFrom(item[1], others);
+    return { type:'mc',
+      q:`Was bedeutet <code>${item[0]}</code> in einem regulären Ausdruck?`,
+      options, correct,
+      explain:`<code>${item[0]}</code> steht für: ${item[1]}.` };
+  }},
+
+  // ── Data Frames ──
+  { topic:'dataframes', type:'mc', make() {
+    const staedte = ['Berlin','Hamburg','Köln','Bremen','Essen','Leipzig'];
+    const rows = rshuffle(staedte).slice(0,3);
+    const ew = rows.map(() => rint(1,40) * 100000);
+    const i = rint(1,3), j = rint(1,2);
+    const val = j === 1 ? '"' + rows[i-1] + '"' : String(ew[i-1]);
+    const cand = j === 1
+      ? rows.filter((_,k) => k !== i-1).map(s => '"' + s + '"').concat(String(ew[i-1]))
+      : ew.filter((_,k) => k !== i-1).map(String).concat('"' + rows[i-1] + '"');
+    const { options, correct } = mcStr(val, cand);
+    return { type:'mc',
+      q:`Ein Data Frame <code>df</code> hat Spalte 1 = <code>stadt</code> (${rows.map(s => '"'+s+'"').join(', ')}) und Spalte 2 = <code>einwohner</code> (${ew.join(', ')}). Was gibt <code>df[${i}, ${j}]</code> zurück?`,
+      options, correct,
+      explain:`<code>df[${i}, ${j}]</code> = Zeile ${i}, Spalte ${j} → <code>${val}</code>.` };
+  }},
+
+];
+
+// ── Mini-Korpora für die BOW/DFM-Generatoren ──
+const SENTENCE_BANK = [
+  'der hund beißt den mann',
+  'die katze jagt die maus durch den garten',
+  'das theater zeigt heute ein neues stück',
+  'die börse fällt der markt reagiert nervös',
+  'inflation steigt und der preis bricht rekorde',
+  'das auto fährt schnell über die autobahn'
+];
+const FREQ_BANK = [
+  'die börse fällt der markt fällt heute erneut',
+  'das auto fährt das auto bremst das auto hält',
+  'inflation steigt der preis steigt der lohn steigt',
+  'die wahl naht die partei kämpft die wahl entscheidet'
+];
+const DFM_BANK = [
+  ['der hund bellt', 'der hund schläft'],
+  ['das auto ist das beste auto', 'das rad ist rund'],
+  ['aktien fallen heute', 'aktien steigen aktien morgen'],
+  ['inflation steigt', 'der preis steigt stark', 'die kosten steigen heute'],
+  ['theater zeigt ein stück', 'die oper zeigt ein stück', 'das ballett tanzt heute']
+];
+const TOP_BANK = [
+  { docs:['wahl wahl partei stimme', 'wahl partei ergebnis', 'wahl umfrage'], top:'wahl' },
+  { docs:['aktie aktie fällt markt', 'aktie steigt markt', 'aktie kurs'], top:'aktie' },
+  { docs:['auto auto fährt schnell', 'auto motor bremst', 'auto reifen wechsel'], top:'auto' },
+  { docs:['klima klima wandel erde', 'klima schutz politik', 'klima ziel verfehlt'], top:'klima' }
+];
+function tok(s) { return s.toLowerCase().split(/[^a-zäöüß0-9]+/i).filter(Boolean); }
+function uniqTokens(docs) { return [...new Set(docs.flatMap(tok))]; }
+
+GENERATORS.push(
+
+  // BOW: Anzahl Tokens
+  { topic:'bow', type:'mc', make() {
+    const s = rpick(SENTENCE_BANK);
+    const n = tok(s).length;
+    const { options, correct } = mcNum(n);
+    return { type:'mc',
+      q:`Wie viele Tokens liefert <code>strsplit("${s}", "\\\\W+")</code>?`,
+      options, correct,
+      explain:`<code>\\\\W+</code> trennt an allen Nicht-Wortzeichen (hier: Leerzeichen). Der Satz hat ${n} Wörter → ${n} Tokens.` };
+  }},
+
+  // BOW: Worthäufigkeit im Text
+  { topic:'bow', type:'mc', make() {
+    const text = rpick(FREQ_BANK);
+    const tokens = tok(text);
+    const counts = {};
+    tokens.forEach(t => counts[t] = (counts[t] || 0) + 1);
+    const word = rpick(Object.keys(counts).filter(w => counts[w] >= 2));
+    const n = counts[word];
+    const { options, correct } = mcNum(n);
+    return { type:'mc',
+      q:`Wie oft kommt im Text „${text}" das Wort <code>"${word}"</code> vor?`,
+      options, correct,
+      explain:`Im Bag-of-Words-Modell zählt allein die Häufigkeit: <code>"${word}"</code> erscheint ${n}× — unabhängig von der Position.` };
+  }},
+
+  // DFM: Zeilen oder Spalten
+  { topic:'dfm', type:'mc', make() {
+    const docs = rpick(DFM_BANK);
+    const docList = docs.map(d => '„' + d + '"').join(', ');
+    if (Math.random() < 0.4) {
+      const { options, correct } = mcNum(docs.length);
+      return { type:'mc',
+        q:`Ein Korpus besteht aus diesen Dokumenten: ${docList}. Wie viele <em>Zeilen</em> hat die DFM?`,
+        options, correct,
+        explain:`Jede Zeile einer DFM steht für ein Dokument. Hier sind es ${docs.length} Dokumente → ${docs.length} Zeilen.` };
+    }
+    const cols = uniqTokens(docs).length;
+    const { options, correct } = mcNum(cols);
+    return { type:'mc',
+      q:`Ein Korpus besteht aus diesen Dokumenten: ${docList}. Wie viele <em>Spalten</em> (Features) hat die DFM?`,
+      options, correct,
+      explain:`Jede Spalte ist ein <em>einzigartiges</em> Wort über alle Dokumente hinweg. Hier gibt es ${cols} verschiedene Wörter → ${cols} Spalten.` };
+  }},
+
+  // DFM: Zellenwert
+  { topic:'dfm', type:'mc', make() {
+    const docs = rpick(DFM_BANK);
+    const di = rint(0, docs.length - 1);
+    const tokens = tok(docs[di]);
+    const counts = {};
+    tokens.forEach(t => counts[t] = (counts[t] || 0) + 1);
+    const word = rpick([...new Set(tokens)]);
+    const n = counts[word];
+    const { options, correct } = mcNum(n);
+    return { type:'mc',
+      q:`In der DFM des Korpus — welchen Zellenwert hat das Wort <code>"${word}"</code> im Dokument „${docs[di]}"?`,
+      options, correct,
+      explain:`Die Zelle [Dokument, "${word}"] enthält die Häufigkeit des Wortes in genau diesem Dokument: ${n}.` };
+  }},
+
+  // DFM: häufigstes Feature (topfeatures)
+  { topic:'dfm', type:'mc', make() {
+    const e = rpick(TOP_BANK);
+    const distractors = rshuffle(uniqTokens(e.docs).filter(w => w !== e.top)).slice(0, 3);
+    const { options, correct } = mcFrom(e.top, distractors);
+    return { type:'mc',
+      q:`Korpus: ${e.docs.map(d => '„' + d + '"').join(', ')}. Welches Wort gibt <code>topfeatures()</code> als häufigstes zurück?`,
+      options, correct,
+      explain:`<code>topfeatures()</code> zählt über alle Dokumente hinweg. <code>"${e.top}"</code> kommt am häufigsten vor.` };
+  }},
+
+  // Ähnlichkeit: gemeinsame Terme zweier Dokumente
+  { topic:'advanced', type:'mc', make() {
+    const docs = rpick(DFM_BANK);
+    const a = new Set(tok(docs[0])), b = new Set(tok(docs[1]));
+    const shared = [...a].filter(w => b.has(w));
+    const n = shared.length;
+    const { options, correct } = mcNum(n);
+    return { type:'mc',
+      q:`Zwei Dokumente: „${docs[0]}" und „${docs[1]}". Wie viele <em>verschiedene</em> Wörter kommen in <strong>beiden</strong> vor?`,
+      options, correct,
+      explain:`Gemeinsame Wörter${n ? ': ' + shared.map(w => '<code>' + w + '</code>').join(', ') : ' gibt es hier keine'}. Genau solche Überschneidungen treiben Ähnlichkeitsmaße wie die Cosinus-Ähnlichkeit nach oben.` };
+  }}
+
+);
+
+// ── quanteda-Pipeline: Code-Eingabe-Generatoren ──
+GENERATORS.push(
+
+  // Schritt 1: Corpus erstellen
+  { topic:'dfm', type:'code', make() {
+    const v = rpick(['texte','artikel','tagesschau','dokumente','reden']);
+    return { type:'code',
+      q:`Erstellen Sie aus dem Textvektor <code>${v}</code> ein quanteda-Corpus-Objekt.`,
+      hint:'Die Funktion heißt genauso wie das Objekt, das sie erzeugt.',
+      answers:[`corpus(${v})`],
+      explain:`<code>corpus(${v})</code> ist Schritt 1 der quanteda-Pipeline: Rohtexte werden zu einem Corpus mit Metadaten gebündelt.` };
+  }},
+
+  // Schritt 2: Tokenisieren
+  { topic:'dfm', type:'code', make() {
+    const v = rpick(['korpus','mein_corpus','corp','texte_corpus']);
+    return { type:'code',
+      q:`Zerlegen Sie das Corpus <code>${v}</code> mit quanteda in Tokens.`,
+      hint:'Schritt 2 der Pipeline — die Funktion ist die Mehrzahl von „Token".',
+      answers:[`tokens(${v})`],
+      explain:`<code>tokens(${v})</code> zerlegt die Texte in einzelne Wörter — Schritt 2 der Pipeline (corpus → tokens → dfm).` };
+  }},
+
+  // Schritt 3: DFM bauen
+  { topic:'dfm', type:'code', make() {
+    const v = rpick(['toks','meine_tokens','tok','tokens_obj']);
+    return { type:'code',
+      q:`Erstellen Sie aus dem Tokens-Objekt <code>${v}</code> eine Document-Feature-Matrix.`,
+      hint:'Die Funktion heißt wie die englische Abkürzung der Matrix.',
+      answers:[`dfm(${v})`],
+      explain:`<code>dfm(${v})</code> erzeugt die Document-Feature-Matrix — Schritt 3 und Herzstück der quanteda-Pipeline.` };
+  }},
+
+  // Stoppwörter entfernen
+  { topic:'dfm', type:'code', make() {
+    const v = rpick(['toks','meine_tokens','tok']);
+    return { type:'code',
+      q:`Entfernen Sie aus dem Tokens-Objekt <code>${v}</code> die deutschen Stoppwörter.`,
+      hint:'<code>tokens_remove()</code> kombiniert mit <code>stopwords()</code>.',
+      answers:[
+        `tokens_remove(${v}, stopwords("german"))`,
+        `tokens_remove(${v}, stopwords("de"))`
+      ],
+      explain:`<code>tokens_remove(${v}, stopwords("german"))</code> filtert häufige, inhaltsarme Wörter (der, die, und …) heraus. <code>stopwords("de")</code> funktioniert ebenso.` };
+  }},
+
+  // topfeatures
+  { topic:'dfm', type:'code', make() {
+    const v = rpick(['meine_dfm','dfm_obj','d','tagesschau_dfm']);
+    const n = rpick([5,10,15,20]);
+    return { type:'code',
+      q:`Zeigen Sie die <code>${n}</code> häufigsten Features der DFM <code>${v}</code> an.`,
+      hint:'Eine Funktion mit „top" im Namen; das zweite Argument ist die Anzahl.',
+      answers:[`topfeatures(${v}, ${n})`],
+      explain:`<code>topfeatures(${v}, ${n})</code> gibt die ${n} häufigsten Wörter zurück — ein schneller Überblick über die dominanten Begriffe.` };
+  }},
+
+  // Pruning (gehört thematisch zu Ähnlichkeit & Pruning)
+  { topic:'advanced', type:'code', make() {
+    const v = rpick(['meine_dfm','dfm_obj','d']);
+    const n = rpick([2,3,5]);
+    return { type:'code',
+      q:`Behalten Sie in der DFM <code>${v}</code> nur Features, die in mindestens <code>${n}</code> Dokumenten vorkommen (Pruning).`,
+      hint:'<code>dfm_trim()</code> mit dem Argument <code>min_docfreq</code>.',
+      answers:[`dfm_trim(${v}, min_docfreq = ${n})`],
+      explain:`<code>dfm_trim(${v}, min_docfreq = ${n})</code> entfernt sehr seltene Features — ein typischer Pruning-Schritt, der die Matrix verkleinert und Rauschen reduziert.` };
+  }}
+
+);
+
+// ── Listen & Visualisierung: Generatoren ──
+GENERATORS.push(
+
+  // Listen: Zugriff auf benanntes Element
+  { topic:'lists', type:'mc', make() {
+    const names = ['a', 'b', 'c', 'd'].slice(0, rint(3, 4));
+    const vals = names.map(() => rint(5, 40));
+    const pick = rint(0, names.length - 1);
+    const accessor = Math.random() < 0.5 ? `l$${names[pick]}` : `l[["${names[pick]}"]]`;
+    const listDef = `l <- list(${names.map((n, k) => `${n} = ${vals[k]}`).join(', ')})`;
+    const { options, correct } = mcNum(vals[pick]);
+    return { type:'mc',
+      q:`Gegeben <code>${listDef}</code>. Was gibt <code>${accessor}</code> zurück?`,
+      options, correct,
+      explain:`<code>$</code> bzw. <code>[["${names[pick]}"]]</code> entpackt das benannte Element → <code>${vals[pick]}</code>.` };
+  }},
+
+  // Listen: Anzahl Elemente auf oberster Ebene
+  { topic:'lists', type:'mc', make() {
+    const n = rint(2, 5);
+    const parts = Array.from({length:n}, () => rpick(['"text"', 'c(1, 2, 3)', '42', 'TRUE', 'c("a", "b")']));
+    const { options, correct } = mcNum(n);
+    return { type:'mc',
+      q:`Wie viele Elemente hat <code>list(${parts.join(', ')})</code> auf oberster Ebene?`,
+      options, correct,
+      explain:`<code>length()</code> zählt nur die obersten Listenelemente — hier ${n}, egal wie groß die einzelnen Elemente selbst sind.` };
+  }},
+
+  // Listen: Liste erstellen (Code, von WebR validierbar)
+  { topic:'lists', type:'code', make() {
+    const a = rint(1, 20);
+    const b = '"' + rpick(['Text', 'Wort', 'Mining', 'R']) + '"';
+    return { type:'code',
+      q:`Erstellen Sie eine Liste mit den beiden Elementen <code>${a}</code> und <code>${b}</code>.`,
+      hint:'Funktion <code>list()</code> — Elemente wie bei <code>c()</code> mit Komma trennen.',
+      answers:[`list(${a}, ${b})`],
+      explain:`<code>list(${a}, ${b})</code> bündelt beliebige Objekte. Anders als <code>c()</code> erzwingt es keinen gemeinsamen Typ.` };
+  }},
+
+  // Visualisierung: passende Geometrie
+  { topic:'viz', type:'mc', make() {
+    const map = [
+      ['eine Linie', 'geom_line()'],
+      ['eine ausgefüllte Fläche', 'geom_area()'],
+      ['Balken', 'geom_col()'],
+      ['einzelne Punkte (Streudiagramm)', 'geom_point()']
+    ];
+    const item = rpick(map);
+    const others = rshuffle(map.filter(m => m[1] !== item[1]).map(m => m[1])).slice(0, 3);
+    const { options, correct } = mcFrom(item[1], others);
+    return { type:'mc',
+      q:`Welche ggplot2-Geometrie stellt die Daten als ${item[0]} dar?`,
+      options, correct,
+      explain:`<code>${item[1]}</code> erzeugt ${item[0]}. Die Grammatik bleibt gleich — nur die <code>geom_*()</code>-Ebene wechselt.` };
+  }}
+
+);
+
+// ── Text Clustering: Generatoren ──
+GENERATORS.push(
+
+  // Aktualisierungsschritt: neues Cluster-Zentrum = spaltenweiser Mittelwert
+  { topic:'clustering', type:'mc', make() {
+    const nDocs = rint(2, 3), nFeat = 3;
+    const docs = Array.from({length:nDocs}, () => Array.from({length:nFeat}, () => rint(0, 4)));
+    const f = rint(0, nFeat - 1);
+    if (docs.every(d => d[f] === 0)) docs[0][f] = rint(1, 4); // nicht alles 0
+    const col = docs.map(d => d[f]);
+    const sum = col.reduce((a, b) => a + b, 0);
+    const mean = sum / nDocs;
+    const fmt = x => (Math.round(x * 100) / 100).toString();
+    const correctL = fmt(mean);
+    const { options, correct } = mcStr(correctL, [fmt(sum), fmt(Math.max(...col)), fmt(mean + 1), fmt(col[0])]);
+    const docStr = docs.map((d, i) => `d${i + 1} = (${d.join(', ')})`).join(', ');
+    return { type:'mc',
+      q:`Ein Cluster enthält die Dokumente ${docStr}. Im Aktualisierungsschritt ist das neue Zentrum der spaltenweise Mittelwert. Welchen Wert hat <strong>Feature ${f + 1}</strong>?`,
+      options, correct,
+      explain:`Spalte ${f + 1}: (${col.join(' + ')}) / ${nDocs} = ${fmt(mean)}. Das Cluster-Zentrum ist der Durchschnitt aller zugewiesenen Dokumente.` };
+  }},
+
+  // k-means aufrufen (Code; quanteda/DFM → Fallback auf String-Vergleich)
+  { topic:'clustering', type:'code', make() {
+    const k = rpick([2, 3, 4, 5, 6]);
+    return { type:'code',
+      q:`Berechnen Sie k-means auf der DFM <code>mat</code> mit <code>${k}</code> Clustern.`,
+      hint:'Funktion <code>kmeans()</code>, Argument <code>centers</code>.',
+      answers:[`kmeans(mat, centers = ${k})`, `kmeans(mat, ${k})`],
+      explain:`<code>kmeans(mat, centers = ${k})</code> teilt die Dokumente in ${k} Cluster. Mit <code>iter.max</code> erhöht man bei Bedarf die Iterationsobergrenze.` };
+  }},
+
+  // Wahl von k: grobe vs. feine Muster
+  { topic:'clustering', type:'mc', make() {
+    const fein = Math.random() < 0.5;
+    const scenario = fein
+      ? 'Sie möchten innerhalb der Politik feine Unterthemen (Außen-, Sozial-, Europapolitik) unterscheiden.'
+      : 'Sie möchten nur die groben Blöcke „Sport vs. Politik vs. Wirtschaft" trennen.';
+    const correctL = fein ? 'eher großes k' : 'eher kleines k';
+    const { options, correct } = mcFrom(correctL, [fein ? 'eher kleines k' : 'eher großes k', 'k spielt keine Rolle']);
+    return { type:'mc',
+      q:`${scenario} Welches <code>k</code> ist sinnvoll?`,
+      options, correct,
+      explain: fein
+        ? 'Feine Differenzierung verlangt mehr, kleinere Cluster → größeres k.'
+        : 'Grobe Blöcke verlangen wenige, große Cluster → kleineres k.' };
+  }}
+
+);
+
+// Stabile IDs für Generatoren (für Spaced-Repetition-Tracking pro Vorlage)
+GENERATORS.forEach((g, i) => { g.id = `g${i}`; g.isGenerator = true; });
+
+// Kombinierter Fragenpool (statische Fragen + Generator-Vorlagen) für ein Thema
+function poolFor(topicId) {
+  const statics = topicId === 'all' ? QUESTIONS : QUESTIONS.filter(q => q.topic === topicId);
+  const gens    = topicId === 'all' ? GENERATORS : GENERATORS.filter(g => g.topic === topicId);
+  return [...statics, ...gens];
+}
+
+// Macht aus einer Generator-Vorlage eine konkrete Frage (statische Fragen unverändert)
+const lastVariant = {}; // templateId → zuletzt erzeugter Fragetext (Anti-Wiederholung)
+function instantiate(entry) {
+  if (!entry.isGenerator) return entry;
+  let inst = entry.make();
+  // Bis zu 5× neu würfeln, damit nicht exakt dieselbe Variante direkt
+  // hintereinander erscheint.
+  for (let tries = 0; tries < 5 && inst.q === lastVariant[entry.id]; tries++) {
+    inst = entry.make();
+  }
+  lastVariant[entry.id] = inst.q;
+  inst.id = entry.id;
+  inst.topic = entry.topic;
+  inst.isGenerator = true;
+  return inst;
+}
+
+// ════════════════════════════════════════════════════
+//  HOME SCREEN
+// ════════════════════════════════════════════════════
+const SCREENS = ['home-screen', 'quiz-screen', 'finish-screen', 'stats-screen', 'profile-screen', 'browse-screen'];
+function showOnly(id) {
+  SCREENS.forEach(s => { document.getElementById(s).style.display = s === id ? '' : 'none'; });
+}
+
+function showHome() {
+  if (!activeProfile) { showProfiles(); return; } // ohne Profil zuerst auswählen
+  showOnly('home-screen');
+  updateHeaderStats();
+  updateHomeActions();
+  renderGoalRing();
+  renderTopicGrid();
+  maybeShowOnboarding();
+}
+
+// ════════════════════════════════════════════════════
+//  THEME (Hell / Dunkel / Automatisch)
+// ════════════════════════════════════════════════════
+function resolveTheme(mode) {
+  return mode === 'auto'
+    ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+    : mode;
+}
+function applyTheme(mode) {
+  localStorage.setItem('rmining_theme', mode);
+  document.documentElement.setAttribute('data-theme', resolveTheme(mode));
+  const btn = document.getElementById('theme-btn');
+  if (btn) btn.textContent = mode === 'auto' ? '🌓' : (mode === 'light' ? '☀️' : '🌙');
+}
+function cycleTheme() {
+  const cur = localStorage.getItem('rmining_theme') || 'auto';
+  applyTheme(cur === 'auto' ? 'light' : cur === 'light' ? 'dark' : 'auto');
+}
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+  if ((localStorage.getItem('rmining_theme') || 'auto') === 'auto') applyTheme('auto');
+});
+
+// ════════════════════════════════════════════════════
+//  TAGESZIEL-RING
+// ════════════════════════════════════════════════════
+function renderGoalRing() {
+  const wrap = document.getElementById('goal-ring-wrap');
+  if (!wrap) return;
+  const goal = state.goal || 20;
+  const count = state.todayCount || 0;
+  const pct = Math.min(1, count / goal);
+  const r = 22, circ = 2 * Math.PI * r, off = circ * (1 - pct);
+  const done = count >= goal;
+  wrap.innerHTML = `
+    <svg width="52" height="52" viewBox="0 0 52 52">
+      <circle cx="26" cy="26" r="${r}" fill="none" stroke="var(--border)" stroke-width="6"/>
+      <circle cx="26" cy="26" r="${r}" fill="none" stroke="${done ? 'var(--green)' : 'var(--blue)'}" stroke-width="6"
+        stroke-linecap="round" stroke-dasharray="${circ}" stroke-dashoffset="${off}" transform="rotate(-90 26 26)"/>
+      ${done ? '<text x="26" y="33" text-anchor="middle" font-size="18">🏆</text>'
+             : `<text x="26" y="31" text-anchor="middle" font-size="13" font-weight="800" fill="var(--text)">${count}</text>`}
+    </svg>
+    <div class="goal-ring-text">Tagesziel: <b>${count}/${goal}</b> Karten${done ? ' — geschafft! ✓' : ''}</div>`;
+}
+function cycleGoal() {
+  const opts = [10, 20, 30, 50];
+  state.goal = opts[(opts.indexOf(state.goal || 20) + 1) % opts.length];
+  saveState();
+  renderGoalRing();
+}
+
+// ════════════════════════════════════════════════════
+//  KONFETTI (Session-Ende)
+// ════════════════════════════════════════════════════
+function spawnConfetti() {
+  const colors = ['#58cc02', '#1cb0f6', '#ffd900', '#ff4b4b', '#ff9600', '#a560ff'];
+  for (let i = 0; i < 70; i++) {
+    const d = document.createElement('div');
+    d.className = 'confetti-piece';
+    d.style.left = Math.random() * 100 + 'vw';
+    d.style.background = colors[i % colors.length];
+    const dur = 2 + Math.random() * 2;
+    d.style.animationDuration = dur + 's';
+    d.style.animationDelay = Math.random() * 0.4 + 's';
+    document.body.appendChild(d);
+    setTimeout(() => d.remove(), (dur + 0.6) * 1000);
+  }
+}
+
+// ════════════════════════════════════════════════════
+//  ONBOARDING (einmalig)
+// ════════════════════════════════════════════════════
+function maybeShowOnboarding() {
+  if (localStorage.getItem('rmining_onboarded')) return;
+  document.getElementById('onboarding').style.display = '';
+}
+function closeOnboarding() {
+  localStorage.setItem('rmining_onboarded', '1');
+  document.getElementById('onboarding').style.display = 'none';
+}
+
+// ════════════════════════════════════════════════════
+//  KARTEIKARTEN-BLÄTTERMODUS (ohne Wertung)
+// ════════════════════════════════════════════════════
+let browse = { cards: [], idx: 0, revealed: false };
+function startBrowse(topicId) {
+  const pool = poolFor(topicId);
+  if (!pool.length) return;
+  browse = { cards: rshuffle(pool).map(instantiate), idx: 0, revealed: false };
+  showOnly('browse-screen');
+  document.getElementById('browse-total').textContent = browse.cards.length;
+  renderFlashcard();
+}
+function renderFlashcard() {
+  const q = browse.cards[browse.idx];
+  document.getElementById('browse-current').textContent = browse.idx + 1;
+  const topic = TOPICS.find(t => t.id === q.topic);
+  const typeLabel = q.type === 'mc' ? 'Multiple Choice' : q.type === 'code' ? 'Code-Eingabe' : 'Lückentext';
+
+  let optionsHtml = '';
+  if (q.type === 'mc') {
+    optionsHtml = '<div class="options" style="margin-top:16px">' + q.options.map((o, i) =>
+      `<div class="option-btn ${browse.revealed && i === q.correct ? 'correct' : ''}" style="cursor:default">
+         <div class="option-letter">${i + 1}</div><div>${o}</div></div>`).join('') + '</div>';
+  }
+
+  let answerHtml = '';
+  if (browse.revealed) {
+    let head = (q.type === 'code' || q.type === 'fill')
+      ? `<div class="fa-label">Lösung</div><code>${escapeHtml(q.answers[0])}</code>`
+      : `<div class="fa-label">Erklärung</div>`;
+    answerHtml = `<div class="flashcard-answer">${head}
+      <div style="margin-top:8px;font-size:0.92rem;line-height:1.5">${q.explain || ''}</div></div>`;
+  }
+
+  document.getElementById('flashcard').innerHTML =
+    `<div class="flashcard-side">${topic ? topic.name : ''} · ${typeLabel}</div>
+     <div class="flashcard-q">${q.q}</div>${optionsHtml}${answerHtml}`;
+  document.getElementById('browse-flip').textContent = browse.revealed ? 'Antwort verbergen' : 'Antwort zeigen';
+}
+function browseFlip() { browse.revealed = !browse.revealed; renderFlashcard(); }
+function browseNext() { browse.idx = (browse.idx + 1) % browse.cards.length; browse.revealed = false; renderFlashcard(); }
+function browsePrev() { browse.idx = (browse.idx - 1 + browse.cards.length) % browse.cards.length; browse.revealed = false; renderFlashcard(); }
+
+function showProfiles() {
+  showOnly('profile-screen');
+  renderProfileList();
+  setTimeout(() => document.getElementById('new-profile-name')?.focus(), 50);
+}
+
+function renderProfileList() {
+  const p = loadProfiles();
+  const names = Object.keys(p.profiles);
+  const list = document.getElementById('profile-list');
+  if (!names.length) { list.innerHTML = ''; return; }
+  list.innerHTML = names.map(name => {
+    const s = p.profiles[name] || {};
+    const seen = s.scores ? Object.values(s.scores).filter(x => x.attempts > 0).length : 0;
+    const isActive = name === activeProfile;
+    return `
+      <div class="profile-row" onclick="createProfile('${name.replace(/'/g, "\\'")}')">
+        <div class="profile-row-icon">${isActive ? '✅' : '👤'}</div>
+        <div class="profile-row-info">
+          <div class="profile-row-name">${name}</div>
+          <div class="profile-row-meta">${s.xp || 0} XP · ${seen} Karten bearbeitet${isActive ? ' · aktiv' : ''}</div>
+        </div>
+        <button class="profile-row-del" title="Profil löschen"
+                onclick="event.stopPropagation();deleteProfile('${name.replace(/'/g, "\\'")}')">🗑</button>
+      </div>`;
+  }).join('');
+}
+
+function updateHeaderStats() {
+  document.getElementById('xp-count').textContent = state.xp;
+  document.getElementById('streak-count').textContent = state.streak;
+}
+
+function updateHomeActions() {
+  const due = dueCards().length;
+  const fresh = newCards().length;
+  const weak = weakCards().length;
+  const dueSub = document.getElementById('due-sub');
+  dueSub.textContent = due > 0
+    ? `${due} ${due === 1 ? 'Karte' : 'Karten'} fällig`
+    : (fresh > 0 ? `${fresh} neue Karten` : 'Alles erledigt 🎉');
+  const mBtn = document.getElementById('btn-mistakes');
+  document.getElementById('mistakes-sub').textContent =
+    weak > 0 ? `${weak} schwache ${weak === 1 ? 'Karte' : 'Karten'}` : 'keine offen';
+  mBtn.disabled = weak === 0;
+}
+
+function renderTopicGrid() {
+  const grid = document.getElementById('topic-grid');
+  grid.innerHTML = '';
+  TOPICS.forEach(topic => {
+    const qs = poolFor(topic.id);
+    const genCount = qs.filter(q => q.isGenerator).length;
+    const attempted = qs.filter(q => state.scores[q.id]?.attempts > 0).length;
+    const mastered  = qs.filter(q => {
+      const s = state.scores[q.id];
+      return s && s.attempts >= 2 && s.correct / s.attempts >= 0.8;
+    }).length;
+    const pct = qs.length ? Math.round(attempted / qs.length * 100) : 0;
+    const isMastered = mastered === qs.length && qs.length > 0;
+
+    const card = document.createElement('div');
+    card.className = 'topic-card';
+    card.innerHTML = `
+      <div class="topic-icon">${topic.icon}</div>
+      <div class="topic-name">${topic.name}</div>
+      <div class="topic-count">${qs.length} Vorlagen${genCount ? ' · ∞ Varianten' : ''} · ${attempted} bearbeitet</div>
+      <div class="topic-progress-bar"><div class="topic-progress-fill" style="width:${pct}%"></div></div>
+      ${isMastered ? '<div class="topic-badge mastered">✓ Gemeistert</div>' : (attempted > 0 ? `<div class="topic-badge">${pct}%</div>` : '')}
+    `;
+    card.onclick = () => startSession(topic.id);
+    grid.appendChild(card);
+  });
+}
+
+// ════════════════════════════════════════════════════
+//  SESSION
+// ════════════════════════════════════════════════════
+let session = { questions: [], idx: 0, correct: 0, wrong: 0, answered: false };
+
+// Startet eine Session aus einer fertigen Liste von Vorlagen/Fragen.
+function launch(templates) {
+  if (!templates.length) return;
+  session = {
+    questions: templates.map(instantiate),
+    idx: 0, correct: 0, wrong: 0, answered: false, checking: false
+  };
+  showOnly('quiz-screen');
+  document.getElementById('q-total').textContent = session.questions.length;
+  showQuestion();
+}
+
+function startSession(topicId) {
+  const pool = poolFor(topicId);
+  if (!pool.length) return;
+  const n = topicId === 'all' ? 30 : Math.min(pool.length, 10);
+  launch(weightedSample(pool, n));
+}
+
+// Fällige Karten zuerst (niedrigste Box, früheste Fälligkeit), aufgefüllt mit
+// neuen Karten — bis zu 20 pro Runde.
+function startDue() {
+  const due = dueCards().sort((a, b) =>
+    ((state.scores[a.id].box || 0) - (state.scores[b.id].box || 0)) ||
+    ((state.scores[a.id].due || 0) - (state.scores[b.id].due || 0)));
+  const pool = [...due, ...rshuffle(newCards())].slice(0, 20);
+  if (!pool.length) { startSession('all'); return; }
+  launch(pool);
+}
+
+function startMistakes() {
+  const weak = rshuffle(weakCards()).slice(0, 20);
+  if (!weak.length) return;
+  launch(weak);
+}
+
+// ════════════════════════════════════════════════════
+//  STATISTIK-SCREEN
+// ════════════════════════════════════════════════════
+function showStats() {
+  showOnly('stats-screen');
+  renderStats();
+}
+
+function renderStats() {
+  const all = allCards();
+  const seen = all.filter(c => !isNew(c.id)).length;
+  const mastered = all.filter(c => { const s = state.scores[c.id]; return s && (s.box || 0) >= 4; }).length;
+  const due = dueCards().length;
+
+  document.getElementById('stats-overview').innerHTML = `
+    <div class="stat-tile"><div class="stat-tile-value">${state.xp}</div><div class="stat-tile-label">XP</div></div>
+    <div class="stat-tile"><div class="stat-tile-value">${state.streak} 🔥</div><div class="stat-tile-label">Streak</div></div>
+    <div class="stat-tile"><div class="stat-tile-value">${seen}</div><div class="stat-tile-label">gesehen</div></div>
+    <div class="stat-tile"><div class="stat-tile-value">${mastered}</div><div class="stat-tile-label">gefestigt</div></div>
+    <div class="stat-tile"><div class="stat-tile-value">${due}</div><div class="stat-tile-label">fällig</div></div>
+  `;
+
+  // Pro Thema: Beherrschungsgrad = Ø(box/maxBox) über bearbeitete Karten
+  const maxBox = LEITNER_DAYS.length - 1;
+  const rows = TOPICS.map(t => {
+    const cards = poolFor(t.id);
+    const done = cards.filter(c => !isNew(c.id));
+    const mast = done.length
+      ? Math.round(done.reduce((sum, c) => sum + ((state.scores[c.id].box || 0) / maxBox), 0) / done.length * 100)
+      : 0;
+    return { name: t.name, mast, done: done.length, total: cards.length };
+  }).sort((a, b) => {
+    // unbearbeitete ans Ende, sonst schwächste zuerst
+    if (a.done === 0 && b.done === 0) return 0;
+    if (a.done === 0) return 1;
+    if (b.done === 0) return -1;
+    return a.mast - b.mast;
+  });
+
+  const color = p => p >= 70 ? 'var(--green)' : p >= 40 ? '#ffb020' : 'var(--red)';
+  document.getElementById('stats-topics').innerHTML = rows.map(r => `
+    <div class="stats-topic-row">
+      <div class="stats-topic-name">${r.name}</div>
+      <div class="stats-topic-track"><div class="stats-topic-fill" style="width:${r.done ? r.mast : 0}%;background:${color(r.mast)}"></div></div>
+      <div class="stats-topic-pct">${r.done ? r.mast + '%' : '–'}</div>
+    </div>
+  `).join('');
+}
+
+function exportProgress() {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'rmining-fortschritt.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importProgress(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result);
+      if (typeof data !== 'object' || !data) throw new Error('ungültig');
+      state = Object.assign({ xp: 0, streak: 0, lastDate: null, scores: {} }, data);
+      if (!state.scores) state.scores = {};
+      saveState();
+      updateHeaderStats();
+      renderStats();
+      alert('Fortschritt erfolgreich importiert ✓');
+    } catch (e) {
+      alert('Die Datei konnte nicht gelesen werden. Bitte eine zuvor exportierte Fortschritts-Datei wählen.');
+    }
+  };
+  reader.readAsText(file);
+}
+
+function showQuestion() {
+  const q = session.questions[session.idx];
+  session.answered = false;
+  const feedback = document.getElementById('feedback');
+  feedback.className = 'feedback';
+  feedback.style.display = 'none';
+
+  document.getElementById('q-current').textContent = session.idx + 1;
+  document.getElementById('progress-fill').style.width =
+    (session.idx / session.questions.length * 100) + '%';
+
+  document.getElementById('q-meta').textContent =
+    TOPICS.find(t => t.id === q.topic)?.name + ' · ' +
+    (q.type === 'mc' ? 'Multiple Choice' : q.type === 'code' ? 'Code-Eingabe' : 'Lückentext');
+
+  document.getElementById('q-text').innerHTML = q.q;
+
+  const hintEl = document.getElementById('q-hint');
+  if (q.hint) {
+    hintEl.innerHTML =
+      `<button class="hint-btn" onclick="this.style.display='none';this.nextElementSibling.style.display='block'">💡 Tipp anzeigen</button>` +
+      `<span class="hint-reveal" style="display:none">💡 ${q.hint}</span>`;
+    hintEl.style.display = '';
+  } else {
+    hintEl.style.display = 'none';
+  }
+
+  const body = document.getElementById('q-body');
+  body.innerHTML = '';
+
+  if (q.type === 'mc') renderMC(q, body);
+  else if (q.type === 'code') renderCode(q, body);
+  else if (q.type === 'fill') renderFill(q, body);
+
+  const checkBtn = document.getElementById('check-btn');
+  checkBtn.textContent = 'Prüfen';
+  checkBtn.style.display = q.type === 'mc' ? 'none' : '';
+  checkBtn.disabled = true;
+
+  document.getElementById('question-card').style.borderColor = 'transparent';
+}
+
+function renderMC(q, body) {
+  const div = document.createElement('div');
+  div.className = 'options';
+  q.options.forEach((opt, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'option-btn';
+    btn.innerHTML = `<div class="option-letter">${i + 1}</div><div>${opt}</div>`;
+    btn.onclick = () => handleMCAnswer(q, i, btn, div);
+    div.appendChild(btn);
+  });
+  body.appendChild(div);
+}
+
+function handleMCAnswer(q, chosen, clickedBtn, container) {
+  if (session.answered) return;
+  session.answered = true;
+  const isCorrect = chosen === q.correct;
+  const btns = container.querySelectorAll('.option-btn');
+  btns.forEach((b, i) => {
+    b.disabled = true;
+    if (i === q.correct) b.classList.add('correct');
+    else if (i === chosen && !isCorrect) b.classList.add('wrong');
+  });
+  recordAnswer(q, isCorrect);
+  showFeedback(isCorrect, q.explain);
+  document.getElementById('check-btn').textContent = 'Weiter →';
+  document.getElementById('check-btn').style.display = '';
+  document.getElementById('check-btn').disabled = false;
+  document.getElementById('check-btn').onclick = nextQuestion;
+}
+
+function renderCode(q, body) {
+  const wrap = document.createElement('div');
+  wrap.className = 'code-input-wrap';
+  const ta = document.createElement('textarea');
+  ta.className = 'code-input';
+  ta.placeholder = q.isStructural ? 'z.B. data.frame(x = c(1,2,3), y = c("a","b","c"))' : 'R-Code hier eingeben…';
+  ta.spellcheck = false;
+  ta.oninput = () => {
+    document.getElementById('check-btn').disabled = ta.value.trim() === '';
+  };
+  wrap.appendChild(ta);
+  body.appendChild(wrap);
+  const reveal = document.createElement('button');
+  reveal.className = 'reveal-btn';
+  reveal.textContent = 'Lösung anzeigen';
+  reveal.onclick = () => revealSolution(q);
+  body.appendChild(reveal);
+  setTimeout(() => ta.focus(), 50);
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function revealSolution(q) {
+  if (session.answered) return;
+  const ta = document.querySelector('.code-input');
+  if (ta) { ta.value = q.answers[0]; ta.classList.add('wrong'); }
+  session.answered = true;
+  recordAnswer(q, false); // aufgedeckt zählt als nicht gewusst → kommt bald wieder
+  showFeedback(false, '<strong>Musterlösung:</strong> <code>' + escapeHtml(q.answers[0]) + '</code><br>' + (q.explain || ''));
+  const cb = document.getElementById('check-btn');
+  cb.textContent = 'Weiter →';
+  cb.onclick = nextQuestion;
+  cb.disabled = false;
+  cb.style.display = '';
+}
+
+function renderFill(q, body) {
+  const sentence = document.createElement('div');
+  sentence.className = 'blank-sentence';
+  const parts = q.template.split('___');
+  const before = document.createTextNode(parts[0] || '');
+  const input = document.createElement('input');
+  input.className = 'blank-input';
+  input.placeholder = '???';
+  input.spellcheck = false;
+  input.oninput = () => {
+    document.getElementById('check-btn').disabled = input.value.trim() === '';
+  };
+  const after = document.createTextNode(parts[1] || '');
+  sentence.appendChild(before);
+  sentence.appendChild(input);
+  sentence.appendChild(after);
+  body.appendChild(sentence);
+  setTimeout(() => input.focus(), 50);
+}
+
+function normalizeCode(s) {
+  return s.trim().replace(/\s+/g, ' ').replace(/\s*([<,=+*/()\[\]{}])\s*/g, '$1').toLowerCase();
+}
+
+// ════════════════════════════════════════════════════
+//  WebR — echte R-Ausführung im Browser
+//  Prüft Code-Antworten, indem es Studi-Eingabe UND Muster-
+//  lösung ausführt und die Ergebnisse mit all.equal() vergleicht.
+//  Fällt auf String-Vergleich zurück, wenn WebR nicht verfügbar
+//  ist oder den Code nicht ausführen kann (offline, quanteda, …).
+// ════════════════════════════════════════════════════
+let webR = null, webRState = 'idle'; // idle | loading | ready | failed
+
+// Hilfsobjekte, damit gängige Aufgaben (gsub auf `text`, mean(v), nrow(df) …)
+// eine definierte Umgebung haben. Fehlt eine Variable, scheitert die
+// Ausführung → automatischer Fallback auf String-Vergleich.
+const R_PREAMBLE = `
+text <- "Das alte Auto aus den USA, Corona und das alte Eisen"
+v <- c(4, 8, 15, 16, 23, 42)
+x <- c(10, 20, 30, 40)
+s <- "Mining"
+df <- data.frame(stadt = c("Berlin", "Hamburg", "Koeln"), einwohner = c(37, 18, 11), stringsAsFactors = FALSE)
+`;
+
+// Code, der NICHT ausgeführt werden darf (Seiteneffekte, fehlende Pakete,
+// Hilfeaufrufe). Für diese greift ausschließlich der String-Vergleich.
+const NO_EXEC = /\b(install\.packages|library|require|read\.csv2?|read_csv|read_excel|readRDS|saveRDS|write\.csv2?|writeLines|setwd|getwd|source|system|Sys\.|file\.|corpus|corpus_reshape|corpus_subset|tokens|tokens_remove|tokens_ngrams|stopwords|topfeatures|dfm|dfm_trim|dfm_tfidf|dfm_weight|kmeans|set\.seed|textstat_)\b|\?|ggplot|ggsave|geom_|aes\(|wordcloud/;
+
+function setWebRStatus(state) {
+  webRState = state;
+  const dot = document.getElementById('webr-dot');
+  const label = document.getElementById('webr-label');
+  if (!dot || !label) return;
+  const map = {
+    loading: ['#ffb020', 'R lädt …'],
+    ready:   ['var(--green)', 'R aktiv'],
+    failed:  ['#bbb', 'R offline']
+  };
+  const [color, text] = map[state] || ['#bbb', 'R-Engine'];
+  dot.style.background = color;
+  label.textContent = text;
+}
+
+async function ensureWebR() {
+  if (webRState === 'ready') return true;
+  if (webRState === 'loading' || webRState === 'failed') return false;
+  webRState = 'loading';
+  setWebRStatus('loading');
+  try {
+    const { WebR } = await import('https://webr.r-wasm.org/latest/webr.mjs');
+    webR = new WebR();
+    await webR.init();
+    setWebRStatus('ready');
+    return true;
+  } catch (e) {
+    console.warn('WebR konnte nicht geladen werden — Fallback auf String-Vergleich.', e);
+    setWebRStatus('failed');
+    return false;
+  }
+}
+
+// Führt Studi-Code und Musterlösung aus und vergleicht die Ergebnisse.
+// Rückgabe: true (gleiches Ergebnis) | false (anderes) | undefined (nicht
+// entscheidbar → Fehler/Timeout → String-Vergleich übernimmt).
+async function execEquals(userCode, canonical) {
+  if (webRState !== 'ready') return undefined;
+  const expr = `local({
+${R_PREAMBLE}
+.usr <- {
+${userCode}
+}
+.ans <- {
+${canonical}
+}
+isTRUE(all.equal(.usr, .ans))
+})`;
+  try {
+    const result = await Promise.race([
+      webR.evalR(expr),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 6000))
+    ]);
+    const js = await result.toJs();
+    try { webR.destroy(result); } catch {}
+    return js && js.values && js.values[0] === true;
+  } catch (e) {
+    return undefined; // R-Fehler (z.B. Syntaxfehler, fehlende Variable) → unentscheidbar
+  }
+}
+
+async function checkAnswer() {
+  if (session.answered) { nextQuestion(); return; }
+  if (session.checking) return;
+  const q = session.questions[session.idx];
+  let isCorrect = false;
+  let userAnswer = '';
+
+  if (q.type === 'code') {
+    const ta = document.querySelector('.code-input');
+    userAnswer = ta?.value || '';
+    if (!userAnswer.trim()) return;
+    const normUser = normalizeCode(userAnswer);
+    const stringCorrect = q.answers.some(a => normalizeCode(a) === normUser ||
+      normUser.includes(normalizeCode(a)));
+    isCorrect = stringCorrect;
+
+    // WebR nur befragen, wenn der String-Vergleich nicht schon greift und der
+    // Code gefahrlos ausführbar ist. WebR kann nur zusätzlich AKZEPTIEREN
+    // (gleichwertige Varianten), niemals etwas fälschlich ablehnen.
+    if (!stringCorrect && webRState === 'ready' &&
+        !NO_EXEC.test(userAnswer) && !NO_EXEC.test(q.answers[0])) {
+      session.checking = true;
+      const btn = document.getElementById('check-btn');
+      const prevLabel = btn.textContent;
+      btn.textContent = 'Prüfe in R …';
+      btn.disabled = true;
+      const execResult = await execEquals(userAnswer, q.answers[0]);
+      session.checking = false;
+      btn.disabled = false;
+      btn.textContent = prevLabel;
+      if (execResult === true) isCorrect = true;
+    }
+
+    if (ta) ta.classList.add(isCorrect ? 'correct' : 'wrong');
+  } else if (q.type === 'fill') {
+    const inp = document.querySelector('.blank-input');
+    userAnswer = inp?.value || '';
+    if (!userAnswer.trim()) return;
+    isCorrect = q.answers.some(a =>
+      a.toLowerCase().trim() === userAnswer.toLowerCase().trim());
+    if (inp) inp.classList.add(isCorrect ? 'correct' : 'wrong');
+  }
+
+  session.answered = true;
+  recordAnswer(q, isCorrect);
+  showFeedback(isCorrect, q.explain);
+  document.getElementById('check-btn').textContent = 'Weiter →';
+  document.getElementById('check-btn').onclick = nextQuestion;
+  document.getElementById('check-btn').disabled = false;
+}
+
+function showFeedback(isCorrect, explain) {
+  const fb = document.getElementById('feedback');
+  fb.className = 'feedback ' + (isCorrect ? 'correct-fb' : 'wrong-fb');
+  document.getElementById('fb-title').textContent = isCorrect
+    ? ['Richtig! 🎉', 'Super! ✅', 'Perfekt! 🌟', 'Exakt! 👍'][Math.floor(Math.random()*4)]
+    : ['Nicht ganz. ❌', 'Knapp daneben. 😅', 'Schade! 💪', 'Noch nicht. 🔄'][Math.floor(Math.random()*4)];
+  const q = session.questions[session.idx];
+  const t = TOPICS.find(x => x.id === q.topic);
+  let hb = '';
+  if (t && t.chapter) {
+    hb = `<div class="hb-link">📖 <a href="${chapterHref(q.topic)}" target="_blank" rel="noopener">Mehr im Handbuch: ${t.chapter.label} →</a></div>`;
+  }
+  document.getElementById('fb-body').innerHTML = (explain || '') + hb;
+  document.getElementById('question-card').style.borderColor = isCorrect ? 'var(--green)' : 'var(--red)';
+}
+
+function recordAnswer(q, isCorrect) {
+  if (!state.scores[q.id]) state.scores[q.id] = { correct: 0, attempts: 0 };
+  state.scores[q.id].attempts++;
+  if (isCorrect) {
+    state.scores[q.id].correct++;
+    session.correct++;
+    state.xp += 10;
+  } else {
+    session.wrong++;
+  }
+  scheduleCard(q.id, isCorrect);
+  state.todayCount = (state.todayCount || 0) + 1; // fürs Tagesziel
+  saveState();
+  updateHeaderStats();
+}
+
+function skipQuestion() {
+  session.wrong++;
+  const q = session.questions[session.idx];
+  if (!state.scores[q.id]) state.scores[q.id] = { correct: 0, attempts: 0 };
+  state.scores[q.id].attempts++;
+  scheduleCard(q.id, false); // übersprungen zählt wie falsch → kommt bald wieder
+  saveState();
+  nextQuestion();
+}
+
+function nextQuestion() {
+  session.idx++;
+  if (session.idx >= session.questions.length) {
+    showFinish();
+  } else {
+    showQuestion();
+  }
+}
+
+// ════════════════════════════════════════════════════
+//  FINISH SCREEN
+// ════════════════════════════════════════════════════
+function showFinish() {
+  // Update streak
+  state.streak++;
+  saveState();
+
+  showOnly('finish-screen');
+
+  const total = session.correct + session.wrong;
+  const pct = Math.round(session.correct / Math.max(1, total) * 100);
+  if (pct >= 50) spawnConfetti(); // kleine Belohnung ab 50 % Trefferquote
+
+  const emojis = pct >= 90 ? '🏆' : pct >= 70 ? '🎉' : pct >= 50 ? '💪' : '🔄';
+  const titles = pct >= 90 ? 'Ausgezeichnet!' : pct >= 70 ? 'Gut gemacht!' : pct >= 50 ? 'Weiter so!' : 'Nochmal üben!';
+  document.getElementById('finish-emoji').textContent = emojis;
+  document.getElementById('finish-title').textContent = titles;
+  document.getElementById('finish-sub').textContent =
+    `${session.correct} von ${total} Fragen richtig — ${pct}% Trefferquote.`;
+
+  document.getElementById('finish-stats').innerHTML = `
+    <div class="finish-stat">
+      <div class="finish-stat-value" style="color:var(--green)">${session.correct}</div>
+      <div class="finish-stat-label">Richtig</div>
+    </div>
+    <div class="finish-stat">
+      <div class="finish-stat-value" style="color:var(--red)">${session.wrong}</div>
+      <div class="finish-stat-label">Falsch</div>
+    </div>
+    <div class="finish-stat">
+      <div class="finish-stat-value" style="color:var(--blue)">${session.correct * 10}</div>
+      <div class="finish-stat-label">XP verdient</div>
+    </div>
+    <div class="finish-stat">
+      <div class="finish-stat-value" style="color:#ff9600">${state.streak} 🔥</div>
+      <div class="finish-stat-label">Tage-Streak</div>
+    </div>
+  `;
+  updateHeaderStats();
+  renderTopicGrid();
+}
+
+// ════════════════════════════════════════════════════
+//  TASTATURSTEUERUNG
+//  Ziffern 1–4 wählen eine MC-Antwort, Enter prüft / geht weiter.
+// ════════════════════════════════════════════════════
+document.addEventListener('keydown', e => {
+  if (document.getElementById('quiz-screen').style.display === 'none') return;
+  const tag = (e.target.tagName || '').toLowerCase();
+  const typing = tag === 'textarea' || tag === 'input';
+
+  if (e.key === 'Enter') {
+    if (session.answered) { e.preventDefault(); nextQuestion(); return; }
+    const cb = document.getElementById('check-btn');
+    if (cb && cb.style.display !== 'none' && !cb.disabled) { e.preventDefault(); checkAnswer(); }
+    return;
+  }
+
+  if (!typing && /^[1-4]$/.test(e.key)) {
+    const q = session.questions[session.idx];
+    if (q && q.type === 'mc' && !session.answered) {
+      const btns = document.querySelectorAll('.option-btn');
+      const idx = +e.key - 1;
+      if (btns[idx]) { e.preventDefault(); btns[idx].click(); }
+    }
+  }
+});
+
+// ════════════════════════════════════════════════════
+//  INIT
+// ════════════════════════════════════════════════════
+// Theme anwenden (gespeicherte Wahl oder Automatik).
+applyTheme(localStorage.getItem('rmining_theme') || 'auto');
+
+// Alten Einzel-Fortschritt ggf. in ein Profil migrieren, dann starten:
+// bestehendes Profil → direkt zur Übersicht, sonst Profil-Auswahl.
+migrateLegacy();
+const _startup = loadProfiles();
+if (_startup.current && _startup.profiles[_startup.current]) {
+  activateProfile(_startup.current);
+  showHome();
+} else {
+  showProfiles();
+}
+// WebR im Hintergrund laden, damit die R-Ausführung bei der ersten
+// Code-Frage bereitsteht. Schlägt das fehl (offline), bleibt alles
+// per String-Vergleich nutzbar.
+ensureWebR();
+</script>
+</body>
+</html>
