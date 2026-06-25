@@ -464,6 +464,31 @@
   }
   .reveal-btn:hover { color: var(--blue); }
 
+  /* ── Feedback ── */
+  .feedback-link {
+    background: none; border: none; color: var(--muted); cursor: pointer;
+    font-family: inherit; font-size: 0.78rem; padding: 0; opacity: 0.6;
+    text-decoration: none; display: inline-flex; align-items: center; gap: 4px;
+  }
+  .feedback-link:hover { opacity: 1; color: var(--blue); }
+  .fb-form { margin-top: 10px; display: none; text-align: left; }
+  .fb-form textarea {
+    width: 100%; min-height: 70px; padding: 8px 10px; border: 1px solid var(--border);
+    border-radius: 8px; font-family: inherit; font-size: 0.88rem; resize: vertical;
+    background: var(--bg); color: var(--text);
+  }
+  .fb-form textarea:focus { outline: none; border-color: var(--blue); }
+  .fb-form-actions { display: flex; gap: 8px; margin-top: 6px; justify-content: flex-end; }
+  .fb-form-actions button {
+    padding: 5px 14px; border-radius: 6px; border: none; cursor: pointer;
+    font-family: inherit; font-size: 0.82rem;
+  }
+  .fb-send { background: var(--blue); color: #fff; font-weight: 600; }
+  .fb-send:hover { opacity: 0.9; }
+  .fb-send:disabled { opacity: 0.5; cursor: default; }
+  .fb-cancel { background: var(--bg); color: var(--muted); border: 1px solid var(--border) !important; }
+  .fb-status { font-size: 0.82rem; margin-top: 6px; text-align: center; }
+
   /* ── Tastatur-Hinweis ── */
   .kbd { display: inline-block; min-width: 18px; padding: 1px 5px; border: 1px solid var(--border);
     border-bottom-width: 2px; border-radius: 4px; font-size: 0.72rem; font-family: monospace;
@@ -691,6 +716,17 @@
       <button class="btn btn-secondary" onclick="skipQuestion()">Überspringen</button>
       <button class="btn btn-check" id="check-btn" onclick="checkAnswer()" disabled>Prüfen</button>
     </div>
+    <div style="text-align:center; margin-top:8px;">
+      <button class="feedback-link" id="feedback-toggle" onclick="toggleFeedbackForm()">✉ Feedback zu dieser Frage</button>
+      <div class="fb-form" id="fb-form">
+        <textarea id="fb-text" placeholder="Was stimmt nicht? Was könnte besser sein?"></textarea>
+        <div class="fb-form-actions">
+          <button class="fb-cancel" onclick="closeFeedbackForm()">Abbrechen</button>
+          <button class="fb-send" id="fb-send" onclick="sendFeedback()" disabled>Absenden</button>
+        </div>
+        <div class="fb-status" id="fb-status"></div>
+      </div>
+    </div>
   </main>
 </div>
 
@@ -733,7 +769,8 @@
 // Wenn das Handbuch unter einer festen URL liegt (Netlify), hier eintragen,
 // z.B. "https://mein-handbuch.netlify.app". Bleibt es leer, werden relative
 // Links erzeugt (funktioniert, wenn App und Buch im selben Verzeichnis liegen).
-const HANDBOOK_BASE = '';
+const HANDBOOK_BASE = 'https://textasdata-skript.netlify.app';
+const FEEDBACK_EMAIL = 'tobias.schmidt@cityweb.de';
 
 const TOPICS = [
   { id: 'r-basics',    name: 'R-Grundlagen',        icon: '🔧', chapter: { slug:'02-r-grundlagen', label:'R-Grundlagen' } },
@@ -1251,10 +1288,10 @@ const QUESTIONS = [
     correct:1,
     explain:'<code>[[1]]</code> liefert den entpackten Vektor, mit dem gerechnet werden kann. <code>[1]</code> bleibt eine Liste → <code>my_list[1] + 2</code> wirft einen Fehler.' },
 
-  { topic:'lists', type:'fill',
-    q:'Der <code>$</code>-Operator ist äquivalent zu <code>[[ ]]</code> mit Namen: <code>my_list___vec</code>',
-    template:'my_list___vec',
-    answers:['$'],
+  { topic:'lists', type:'mc',
+    q:'Welcher Ausdruck ist äquivalent zu <code>my_list[["vec"]]</code>?',
+    options:['my_list$vec', 'my_list["vec"]', 'my_list[[vec]]', 'my_list@vec'],
+    correct:0,
     explain:'<code>my_list$vec</code> ist identisch mit <code>my_list[["vec"]]</code> — die in der Praxis lesbarste und häufigste Schreibweise.' },
 
   { topic:'lists', type:'mc',
@@ -2473,9 +2510,11 @@ function showQuestion() {
   document.getElementById('progress-fill').style.width =
     (session.idx / session.questions.length * 100) + '%';
 
-  document.getElementById('q-meta').textContent =
-    TOPICS.find(t => t.id === q.topic)?.name + ' · ' +
-    (q.type === 'mc' ? 'Multiple Choice' : q.type === 'code' ? 'Code-Eingabe' : 'Lückentext');
+  const topicObj = TOPICS.find(t => t.id === q.topic);
+  const typeName = q.type === 'mc' ? 'Multiple Choice' : q.type === 'code' ? 'Code-Eingabe' : 'Lückentext';
+  const chLink = chapterHref(q.topic);
+  document.getElementById('q-meta').innerHTML = (topicObj?.name || q.topic) + ' · ' + typeName +
+    (chLink ? ` · <a href="${chLink}" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:none;font-weight:600">📖 Kapitel →</a>` : '');
 
   document.getElementById('q-text').innerHTML = q.q;
 
@@ -2502,6 +2541,8 @@ function showQuestion() {
   checkBtn.disabled = true;
 
   document.getElementById('question-card').style.borderColor = 'transparent';
+
+  closeFeedbackForm();
 }
 
 function renderMC(q, body) {
@@ -2563,6 +2604,8 @@ function revealSolution(q) {
   if (session.answered) return;
   const ta = document.querySelector('.code-input');
   if (ta) { ta.value = q.answers[0]; ta.classList.add('wrong'); }
+  const bi = document.querySelector('.blank-input');
+  if (bi) { bi.value = q.answers[0]; bi.classList.add('wrong'); bi.disabled = true; }
   session.answered = true;
   recordAnswer(q, false); // aufgedeckt zählt als nicht gewusst → kommt bald wieder
   showFeedback(false, '<strong>Musterlösung:</strong> <code>' + escapeHtml(q.answers[0]) + '</code><br>' + (q.explain || ''));
@@ -2571,6 +2614,63 @@ function revealSolution(q) {
   cb.onclick = nextQuestion;
   cb.disabled = false;
   cb.style.display = '';
+}
+
+function toggleFeedbackForm() {
+  const form = document.getElementById('fb-form');
+  const isOpen = form.style.display === 'block';
+  form.style.display = isOpen ? 'none' : 'block';
+  if (!isOpen) {
+    document.getElementById('fb-text').value = '';
+    document.getElementById('fb-send').disabled = true;
+    document.getElementById('fb-status').textContent = '';
+    document.getElementById('fb-text').focus();
+    document.getElementById('fb-text').oninput = () => {
+      document.getElementById('fb-send').disabled = document.getElementById('fb-text').value.trim() === '';
+    };
+  }
+}
+function closeFeedbackForm() {
+  document.getElementById('fb-form').style.display = 'none';
+  document.getElementById('fb-status').textContent = '';
+}
+async function sendFeedback() {
+  const q = session.questions[session.idx];
+  const text = document.getElementById('fb-text').value.trim();
+  if (!text) return;
+  const topicName = TOPICS.find(t => t.id === q.topic)?.name || q.topic;
+  const qPlain = q.q.replace(/<[^>]+>/g, '');
+  const btn = document.getElementById('fb-send');
+  btn.disabled = true;
+  btn.textContent = 'Sende…';
+  document.getElementById('fb-status').textContent = '';
+  try {
+    const res = await fetch(`https://formsubmit.co/ajax/${FEEDBACK_EMAIL}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({
+        _subject: `[Lernapp] Feedback – ${topicName}: ${qPlain}`.slice(0, 120),
+        Thema: topicName,
+        Frage: qPlain,
+        'Frage-ID': q.id || '?',
+        Feedback: text
+      })
+    });
+    if (res.ok) {
+      document.getElementById('fb-status').innerHTML = '<span style="color:var(--green)">✓ Danke für dein Feedback!</span>';
+      document.getElementById('fb-text').value = '';
+      setTimeout(closeFeedbackForm, 2000);
+    } else throw new Error();
+  } catch {
+    // Automatischer Versand nicht möglich (offline / lokal geöffnet / blockiert)
+    // → Notausgang: vorausgefüllte Mail im Mail-Programm öffnen.
+    const subj = encodeURIComponent(`[Lernapp] Feedback – ${topicName}: ${qPlain}`.slice(0, 120));
+    const body = encodeURIComponent(`Thema: ${topicName}\nFrage: ${qPlain}\nID: ${q.id || '?'}\n\nFeedback:\n${text}\n`);
+    window.location.href = `mailto:${FEEDBACK_EMAIL}?subject=${subj}&body=${body}`;
+    document.getElementById('fb-status').innerHTML = '<span style="color:var(--muted)">Automatischer Versand nicht möglich – wir öffnen dein Mail-Programm. Bitte dort nur noch auf „Senden" klicken.</span>';
+  }
+  btn.textContent = 'Absenden';
+  btn.disabled = false;
 }
 
 function renderFill(q, body) {
@@ -2590,6 +2690,11 @@ function renderFill(q, body) {
   sentence.appendChild(input);
   sentence.appendChild(after);
   body.appendChild(sentence);
+  const reveal = document.createElement('button');
+  reveal.className = 'reveal-btn';
+  reveal.textContent = 'Lösung anzeigen';
+  reveal.onclick = () => revealSolution(q);
+  body.appendChild(reveal);
   setTimeout(() => input.focus(), 50);
 }
 
