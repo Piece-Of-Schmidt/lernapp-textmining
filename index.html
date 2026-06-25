@@ -585,6 +585,18 @@
 </head>
 <body>
 
+<!-- Netlify-Forms-Registrierung: wird beim Deploy von Netlify gescannt, damit der
+     JS-POST an "/" akzeptiert wird. Für Nutzer unsichtbar. -->
+<form name="feedback" data-netlify="true" netlify-honeypot="bot-field" hidden>
+  <input type="text" name="Thema" />
+  <input type="text" name="Frage" />
+  <input type="text" name="Fragetyp" />
+  <input type="text" name="Antwortmoeglichkeiten" />
+  <input type="text" name="Frage-ID" />
+  <textarea name="Feedback"></textarea>
+  <input name="bot-field" />
+</form>
+
 <header>
   <div class="logo" onclick="showHome()" onkeydown="if(event.key==='Enter'||event.key===' '){event.stopPropagation();event.preventDefault();showHome();}" title="Zur Startseite" role="button" tabindex="0" style="cursor:pointer">R<span>Mining</span></div>
   <div class="stats">
@@ -726,7 +738,6 @@
         </div>
         <div class="fb-status" id="fb-status"></div>
       </div>
-      <iframe id="fb-frame" name="fb-frame" style="display:none" title="Feedback-Versand"></iframe>
     </div>
   </main>
 </div>
@@ -2662,55 +2673,37 @@ function sendFeedback() {
   btn.textContent = 'Sende…';
   document.getElementById('fb-status').textContent = '';
 
-  // Echtes Formular-POST in ein verstecktes iframe → keine CORS-Beschränkung
-  // (anders als fetch; native Form-Submits dürfen cross-origin posten).
-  const iframe = document.getElementById('fb-frame');
-  const form = document.createElement('form');
-  form.action = `https://formsubmit.co/${FEEDBACK_EMAIL}`;
-  form.method = 'POST';
-  form.target = 'fb-frame';
-  form.style.display = 'none';
-  const add = (name, val) => {
-    const inp = document.createElement('input');
-    inp.type = 'hidden'; inp.name = name; inp.value = val;
-    form.appendChild(inp);
-  };
-  add('_subject', `[Lernapp] Feedback – ${topicName}: ${qPlain}`.slice(0, 120));
-  add('_captcha', 'false');
-  add('_template', 'table');
-  add('Thema', topicName);
-  add('Frage', qPlain);
-  add('Fragetyp', q.type);
-  add('Antwortmoeglichkeiten', detail);
-  add('Frage-ID', String(q.id || '?'));
-  add('Feedback', text);
-  document.body.appendChild(form);
+  // Netlify Forms: same-origin-POST an die eigene Seite → kein CORS, kein Drittanbieter.
+  // Die Einträge landen im Netlify-Dashboard (Site → Forms). Funktioniert nur auf der
+  // deployten Netlify-Seite, nicht lokal → sonst greift der mailto-Notausgang unten.
+  const data = new URLSearchParams();
+  data.append('form-name', 'feedback');
+  data.append('Thema', topicName);
+  data.append('Frage', qPlain);
+  data.append('Fragetyp', q.type);
+  data.append('Antwortmoeglichkeiten', detail);
+  data.append('Frage-ID', String(q.id || '?'));
+  data.append('Feedback', text);
 
-  let done = false;
-  const finishOk = () => {
-    if (done) return; done = true;
-    clearTimeout(timer);
+  fetch('/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: data.toString()
+  })
+  .then(res => {
+    if (!res.ok) throw new Error('status ' + res.status);
     document.getElementById('fb-status').innerHTML = '<span style="color:var(--green)">✓ Danke für dein Feedback!</span>';
     document.getElementById('fb-text').value = '';
-    btn.textContent = 'Absenden'; btn.disabled = false;
     setTimeout(closeFeedbackForm, 2000);
-    form.remove();
-  };
-  iframe.onload = finishOk;
-
-  // Notausgang, falls gar keine Antwort kommt (offline / Sandbox blockiert Netzwerk):
-  const timer = setTimeout(() => {
-    if (done) return; done = true;
-    iframe.onload = null;
-    btn.textContent = 'Absenden'; btn.disabled = false;
+  })
+  .catch(() => {
+    // z.B. lokal geöffnet (kein Netlify-Backend) → vorausgefüllte Mail als Notausgang.
     const subj = encodeURIComponent(`[Lernapp] Feedback – ${topicName}: ${qPlain}`.slice(0, 120));
     const body = encodeURIComponent(`Thema: ${topicName}\nFrage: ${qPlain}\n${detail}\n\nFeedback:\n${text}\n`);
     window.location.href = `mailto:${FEEDBACK_EMAIL}?subject=${subj}&body=${body}`;
     document.getElementById('fb-status').innerHTML = '<span style="color:var(--muted)">Automatischer Versand nicht möglich – wir öffnen dein Mail-Programm. Bitte dort nur noch auf „Senden" klicken.</span>';
-    form.remove();
-  }, 8000);
-
-  form.submit();
+  })
+  .finally(() => { btn.textContent = 'Absenden'; btn.disabled = false; });
 }
 
 function renderFill(q, body) {
