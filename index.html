@@ -471,6 +471,8 @@
     text-decoration: none; display: inline-flex; align-items: center; gap: 4px;
   }
   .feedback-link:hover { opacity: 1; color: var(--blue); }
+  .quiz-subactions { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+  #back-btn[hidden] { visibility: hidden; }
   .fb-form { margin-top: 10px; display: none; text-align: left; }
   .fb-form textarea {
     width: 100%; min-height: 70px; padding: 8px 10px; border: 1px solid var(--border);
@@ -725,19 +727,20 @@
       <div class="feedback-body" id="fb-body"></div>
     </div>
     <div class="action-row">
-      <button class="btn btn-secondary" onclick="skipQuestion()">Überspringen</button>
+      <button class="btn btn-secondary" id="skip-btn" onclick="skipQuestion()">Überspringen</button>
       <button class="btn btn-check" id="check-btn" onclick="checkAnswer()" disabled>Prüfen</button>
     </div>
-    <div style="text-align:center; margin-top:8px;">
+    <div class="quiz-subactions">
+      <button class="feedback-link" id="back-btn" onclick="prevQuestion()">← Zurück</button>
       <button class="feedback-link" id="feedback-toggle" onclick="toggleFeedbackForm()">✉ Feedback zu dieser Frage</button>
-      <div class="fb-form" id="fb-form">
-        <textarea id="fb-text" placeholder="Was stimmt nicht? Was könnte besser sein?"></textarea>
-        <div class="fb-form-actions">
-          <button class="fb-cancel" onclick="closeFeedbackForm()">Abbrechen</button>
-          <button class="fb-send" id="fb-send" onclick="sendFeedback()" disabled>Absenden</button>
-        </div>
-        <div class="fb-status" id="fb-status"></div>
+    </div>
+    <div class="fb-form" id="fb-form">
+      <textarea id="fb-text" placeholder="Was stimmt nicht? Was könnte besser sein?"></textarea>
+      <div class="fb-form-actions">
+        <button class="fb-cancel" onclick="closeFeedbackForm()">Abbrechen</button>
+        <button class="fb-send" id="fb-send" onclick="sendFeedback()" disabled>Absenden</button>
       </div>
+      <div class="fb-status" id="fb-status"></div>
     </div>
   </main>
 </div>
@@ -2401,7 +2404,8 @@ function launch(templates) {
   if (!templates.length) return;
   session = {
     questions: templates.map(instantiate),
-    idx: 0, correct: 0, wrong: 0, answered: false, checking: false
+    idx: 0, correct: 0, wrong: 0, answered: false, checking: false,
+    results: {} // pro Frage-Index: { recorded, correct, userAnswer/chosen, revealed }
   };
   showOnly('quiz-screen');
   document.getElementById('q-total').textContent = session.questions.length;
@@ -2551,10 +2555,86 @@ function showQuestion() {
   checkBtn.textContent = 'Prüfen';
   checkBtn.style.display = q.type === 'mc' ? 'none' : '';
   checkBtn.disabled = true;
+  checkBtn.onclick = checkAnswer;
+
+  // Sekundär-Button zurück in den Default-Zustand
+  const skipBtn = document.getElementById('skip-btn');
+  skipBtn.textContent = 'Überspringen';
+  skipBtn.onclick = skipQuestion;
+
+  // Zurück-Button nur ab der zweiten Frage zeigen
+  document.getElementById('back-btn').hidden = session.idx === 0;
 
   document.getElementById('question-card').style.borderColor = 'transparent';
-
   closeFeedbackForm();
+
+  // Bereits beantwortete Frage (z.B. nach „← Zurück")? Dann Zustand wiederherstellen.
+  if (session.results[session.idx]) restoreResult(q);
+}
+
+// Stellt eine bereits beantwortete Frage wieder her (für Vor-/Zurück-Navigation).
+// Die ursprünglich geloggte Antwort bleibt unverändert; bei falschen Code/Lücken-
+// Antworten darf weiter probiert werden (zählt nicht erneut).
+function restoreResult(q) {
+  const r = session.results[session.idx];
+  if (q.type === 'mc') {
+    const btns = document.querySelectorAll('#q-body .option-btn');
+    btns.forEach((b, i) => {
+      b.disabled = true;
+      if (i === q.correct) b.classList.add('correct');
+      else if (i === r.chosen) b.classList.add('wrong');
+    });
+    session.answered = true;
+    showFeedback(r.correct, q.explain);
+    setContinue();
+  } else { // code / fill
+    const inp = document.querySelector('.code-input, .blank-input');
+    if (inp) { inp.value = r.userAnswer || ''; inp.classList.add(r.correct ? 'correct' : 'wrong'); }
+    if (r.correct || r.revealed) {
+      if (inp) inp.disabled = true;
+      session.answered = true;
+      showFeedback(r.correct, r.revealed
+        ? '<strong>Musterlösung:</strong> <code>' + escapeHtml(q.answers[0]) + '</code><br>' + (q.explain || '')
+        : q.explain);
+      setContinue();
+    } else {
+      // Falsch beantwortet → erneuter Versuch erlaubt (wird nicht neu gewertet).
+      session.answered = false;
+      showFeedback(false, q.explain);
+      enableRetry();
+    }
+  }
+}
+
+// Schaltet die Buttons auf „Weiter →" (Frage abgeschlossen).
+function setContinue() {
+  const cb = document.getElementById('check-btn');
+  cb.textContent = 'Weiter →';
+  cb.onclick = nextQuestion;
+  cb.disabled = false;
+  cb.style.display = '';
+}
+
+// Nach falscher Code-/Lücken-Antwort: weiter probieren (Prüfen bleibt aktiv) und
+// zusätzlich „Weiter →" über den Sekundär-Button anbieten.
+function enableRetry() {
+  const cb = document.getElementById('check-btn');
+  cb.textContent = 'Nochmal prüfen';
+  cb.onclick = checkAnswer;
+  cb.disabled = false;
+  cb.style.display = '';
+  const skipBtn = document.getElementById('skip-btn');
+  skipBtn.textContent = 'Weiter →';
+  skipBtn.onclick = advanceQuestion;
+}
+
+// Bewegt sich zur nächsten Frage, OHNE erneut zu werten (erste Antwort bleibt geloggt).
+function advanceQuestion() { nextQuestion(); }
+
+function prevQuestion() {
+  if (session.idx === 0) return;
+  session.idx--;
+  showQuestion();
 }
 
 function renderMC(q, body) {
@@ -2580,12 +2660,12 @@ function handleMCAnswer(q, chosen, clickedBtn, container) {
     if (i === q.correct) b.classList.add('correct');
     else if (i === chosen && !isCorrect) b.classList.add('wrong');
   });
-  recordAnswer(q, isCorrect);
+  if (!session.results[session.idx]) {
+    recordAnswer(q, isCorrect);
+    session.results[session.idx] = { recorded: true, correct: isCorrect, chosen };
+  }
   showFeedback(isCorrect, q.explain);
-  document.getElementById('check-btn').textContent = 'Weiter →';
-  document.getElementById('check-btn').style.display = '';
-  document.getElementById('check-btn').disabled = false;
-  document.getElementById('check-btn').onclick = nextQuestion;
+  setContinue();
 }
 
 function renderCode(q, body) {
@@ -2596,6 +2676,7 @@ function renderCode(q, body) {
   ta.placeholder = q.isStructural ? 'z.B. data.frame(x = c(1,2,3), y = c("a","b","c"))' : 'R-Code hier eingeben…';
   ta.spellcheck = false;
   ta.oninput = () => {
+    ta.classList.remove('correct', 'wrong');
     document.getElementById('check-btn').disabled = ta.value.trim() === '';
   };
   wrap.appendChild(ta);
@@ -2613,19 +2694,19 @@ function escapeHtml(s) {
 }
 
 function revealSolution(q) {
-  if (session.answered) return;
+  if (session.answered) return; // bereits richtig beantwortet/abgeschlossen
   const ta = document.querySelector('.code-input');
-  if (ta) { ta.value = q.answers[0]; ta.classList.add('wrong'); }
+  if (ta) { ta.value = q.answers[0]; ta.classList.remove('correct'); ta.classList.add('wrong'); ta.disabled = true; }
   const bi = document.querySelector('.blank-input');
-  if (bi) { bi.value = q.answers[0]; bi.classList.add('wrong'); bi.disabled = true; }
+  if (bi) { bi.value = q.answers[0]; bi.classList.remove('correct'); bi.classList.add('wrong'); bi.disabled = true; }
+  if (!session.results[session.idx]) {
+    recordAnswer(q, false); // aufgedeckt zählt als nicht gewusst → kommt bald wieder
+  }
+  session.results[session.idx] = Object.assign(session.results[session.idx] || {},
+    { recorded: true, correct: false, revealed: true, userAnswer: q.answers[0] });
   session.answered = true;
-  recordAnswer(q, false); // aufgedeckt zählt als nicht gewusst → kommt bald wieder
   showFeedback(false, '<strong>Musterlösung:</strong> <code>' + escapeHtml(q.answers[0]) + '</code><br>' + (q.explain || ''));
-  const cb = document.getElementById('check-btn');
-  cb.textContent = 'Weiter →';
-  cb.onclick = nextQuestion;
-  cb.disabled = false;
-  cb.style.display = '';
+  setContinue();
 }
 
 function toggleFeedbackForm() {
@@ -2716,6 +2797,7 @@ function renderFill(q, body) {
   input.placeholder = '???';
   input.spellcheck = false;
   input.oninput = () => {
+    input.classList.remove('correct', 'wrong');
     document.getElementById('check-btn').disabled = input.value.trim() === '';
   };
   const after = document.createTextNode(parts[1] || '');
@@ -2853,22 +2935,36 @@ async function checkAnswer() {
       if (execResult === true) isCorrect = true;
     }
 
-    if (ta) ta.classList.add(isCorrect ? 'correct' : 'wrong');
+    if (ta) { ta.classList.remove('correct', 'wrong'); ta.classList.add(isCorrect ? 'correct' : 'wrong'); }
   } else if (q.type === 'fill') {
     const inp = document.querySelector('.blank-input');
     userAnswer = inp?.value || '';
     if (!userAnswer.trim()) return;
     isCorrect = q.answers.some(a =>
       a.toLowerCase().trim() === userAnswer.toLowerCase().trim());
-    if (inp) inp.classList.add(isCorrect ? 'correct' : 'wrong');
+    if (inp) { inp.classList.remove('correct', 'wrong'); inp.classList.add(isCorrect ? 'correct' : 'wrong'); }
   }
 
-  session.answered = true;
-  recordAnswer(q, isCorrect);
+  // Nur die ERSTE Antwort dieser Frage wird gewertet/geloggt. Spätere Versuche
+  // (nach falscher Antwort) dürfen ausprobiert werden, ändern die Wertung aber nicht.
+  if (!session.results[session.idx]) {
+    recordAnswer(q, isCorrect);
+    session.results[session.idx] = { recorded: true, correct: isCorrect, userAnswer };
+  } else {
+    session.results[session.idx].userAnswer = userAnswer;
+  }
   showFeedback(isCorrect, q.explain);
-  document.getElementById('check-btn').textContent = 'Weiter →';
-  document.getElementById('check-btn').onclick = nextQuestion;
-  document.getElementById('check-btn').disabled = false;
+
+  if (isCorrect) {
+    const inp = document.querySelector('.code-input, .blank-input');
+    if (inp) inp.disabled = true;
+    session.answered = true;
+    setContinue();
+  } else {
+    // Falsch → erneuter Versuch erlaubt, „Weiter →" über den Sekundär-Button.
+    session.answered = false;
+    enableRetry();
+  }
 }
 
 function showFeedback(isCorrect, explain) {
@@ -2904,12 +3000,11 @@ function recordAnswer(q, isCorrect) {
 }
 
 function skipQuestion() {
-  session.wrong++;
   const q = session.questions[session.idx];
-  if (!state.scores[q.id]) state.scores[q.id] = { correct: 0, attempts: 0 };
-  state.scores[q.id].attempts++;
-  scheduleCard(q.id, false); // übersprungen zählt wie falsch → kommt bald wieder
-  saveState();
+  if (!session.results[session.idx]) {
+    recordAnswer(q, false); // übersprungen zählt wie falsch → kommt bald wieder
+    session.results[session.idx] = { recorded: true, correct: false, skipped: true };
+  }
   nextQuestion();
 }
 
