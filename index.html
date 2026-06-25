@@ -726,6 +726,7 @@
         </div>
         <div class="fb-status" id="fb-status"></div>
       </div>
+      <iframe id="fb-frame" name="fb-frame" style="display:none" title="Feedback-Versand"></iframe>
     </div>
   </main>
 </div>
@@ -2634,43 +2635,82 @@ function closeFeedbackForm() {
   document.getElementById('fb-form').style.display = 'none';
   document.getElementById('fb-status').textContent = '';
 }
-async function sendFeedback() {
+// Baut die Frage-Infos für die Feedback-Mail zusammen (inkl. Antwortmöglichkeiten + Lösung).
+function buildQuestionInfo(q) {
+  const topicName = TOPICS.find(t => t.id === q.topic)?.name || q.topic;
+  const qPlain = q.q.replace(/<[^>]+>/g, '').trim();
+  let detail = '';
+  if (q.type === 'mc') {
+    detail = q.options
+      .map((o, i) => `${i + 1}. ${o.replace(/<[^>]+>/g, '').trim()}${i === q.correct ? '   ← richtig' : ''}`)
+      .join('\n');
+  } else if (q.type === 'code') {
+    detail = 'Akzeptierte Lösung(en): ' + (q.answers || []).join('   |   ');
+  } else if (q.type === 'fill') {
+    detail = 'Lückentext: ' + (q.template || '') + '\nRichtige Lücke: ' + (q.answers || []).join(' / ');
+  }
+  return { topicName, qPlain, detail };
+}
+
+function sendFeedback() {
   const q = session.questions[session.idx];
   const text = document.getElementById('fb-text').value.trim();
   if (!text) return;
-  const topicName = TOPICS.find(t => t.id === q.topic)?.name || q.topic;
-  const qPlain = q.q.replace(/<[^>]+>/g, '');
+  const { topicName, qPlain, detail } = buildQuestionInfo(q);
   const btn = document.getElementById('fb-send');
   btn.disabled = true;
   btn.textContent = 'Sende…';
   document.getElementById('fb-status').textContent = '';
-  try {
-    const res = await fetch(`https://formsubmit.co/ajax/${FEEDBACK_EMAIL}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify({
-        _subject: `[Lernapp] Feedback – ${topicName}: ${qPlain}`.slice(0, 120),
-        Thema: topicName,
-        Frage: qPlain,
-        'Frage-ID': q.id || '?',
-        Feedback: text
-      })
-    });
-    if (res.ok) {
-      document.getElementById('fb-status').innerHTML = '<span style="color:var(--green)">✓ Danke für dein Feedback!</span>';
-      document.getElementById('fb-text').value = '';
-      setTimeout(closeFeedbackForm, 2000);
-    } else throw new Error();
-  } catch {
-    // Automatischer Versand nicht möglich (offline / lokal geöffnet / blockiert)
-    // → Notausgang: vorausgefüllte Mail im Mail-Programm öffnen.
+
+  // Echtes Formular-POST in ein verstecktes iframe → keine CORS-Beschränkung
+  // (anders als fetch; native Form-Submits dürfen cross-origin posten).
+  const iframe = document.getElementById('fb-frame');
+  const form = document.createElement('form');
+  form.action = `https://formsubmit.co/${FEEDBACK_EMAIL}`;
+  form.method = 'POST';
+  form.target = 'fb-frame';
+  form.style.display = 'none';
+  const add = (name, val) => {
+    const inp = document.createElement('input');
+    inp.type = 'hidden'; inp.name = name; inp.value = val;
+    form.appendChild(inp);
+  };
+  add('_subject', `[Lernapp] Feedback – ${topicName}: ${qPlain}`.slice(0, 120));
+  add('_captcha', 'false');
+  add('_template', 'table');
+  add('Thema', topicName);
+  add('Frage', qPlain);
+  add('Fragetyp', q.type);
+  add('Antwortmoeglichkeiten', detail);
+  add('Frage-ID', String(q.id || '?'));
+  add('Feedback', text);
+  document.body.appendChild(form);
+
+  let done = false;
+  const finishOk = () => {
+    if (done) return; done = true;
+    clearTimeout(timer);
+    document.getElementById('fb-status').innerHTML = '<span style="color:var(--green)">✓ Danke für dein Feedback!</span>';
+    document.getElementById('fb-text').value = '';
+    btn.textContent = 'Absenden'; btn.disabled = false;
+    setTimeout(closeFeedbackForm, 2000);
+    form.remove();
+  };
+  iframe.onload = finishOk;
+
+  // Notausgang, falls gar keine Antwort kommt (offline / Sandbox blockiert Netzwerk):
+  const timer = setTimeout(() => {
+    if (done) return; done = true;
+    iframe.onload = null;
+    btn.textContent = 'Absenden'; btn.disabled = false;
     const subj = encodeURIComponent(`[Lernapp] Feedback – ${topicName}: ${qPlain}`.slice(0, 120));
-    const body = encodeURIComponent(`Thema: ${topicName}\nFrage: ${qPlain}\nID: ${q.id || '?'}\n\nFeedback:\n${text}\n`);
+    const body = encodeURIComponent(`Thema: ${topicName}\nFrage: ${qPlain}\n${detail}\n\nFeedback:\n${text}\n`);
     window.location.href = `mailto:${FEEDBACK_EMAIL}?subject=${subj}&body=${body}`;
     document.getElementById('fb-status').innerHTML = '<span style="color:var(--muted)">Automatischer Versand nicht möglich – wir öffnen dein Mail-Programm. Bitte dort nur noch auf „Senden" klicken.</span>';
-  }
-  btn.textContent = 'Absenden';
-  btn.disabled = false;
+    form.remove();
+  }, 8000);
+
+  form.submit();
 }
 
 function renderFill(q, body) {
