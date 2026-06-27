@@ -966,8 +966,8 @@ const QUESTIONS = [
   { topic:'dataframes', type:'code',
     q:'Zeigen Sie die ersten 6 Zeilen des Data Frames <code>df</code> an.',
     hint:'Es gibt eine Funktion, die standardmäßig 6 Zeilen anzeigt.',
-    answers:['head(df)', 'head(df, 6)', 'head(df,6)'],
-    explain:'<code>head(df)</code> zeigt die ersten 6 Zeilen. <code>tail(df)</code> die letzten 6. Die Zahl lässt sich anpassen: <code>head(df, 10)</code>.' },
+    answers:['head(df)', 'head(df, 6)', 'head(df,6)', 'df[1:6,]', 'df[1:6, ]', 'df[c(1:6),]'],
+    explain:'<code>head(df)</code> zeigt die ersten 6 Zeilen. Gleichwertig ist die Indizierung <code>df[1:6, ]</code>. <code>tail(df)</code> zeigt die letzten 6. Die Zahl lässt sich anpassen: <code>head(df, 10)</code>.' },
 
   { topic:'dataframes', type:'mc',
     q:'Was gibt <code>df[3, ]</code> zurück?',
