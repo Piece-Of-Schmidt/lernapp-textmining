@@ -1006,9 +1006,11 @@ const QUESTIONS = [
   { topic:'dataframes', type:'code',
     q:'Erstellen Sie einen Data Frame mit zwei Spalten: <code>stadt</code> und <code>einwohner</code>.',
     hint:'Die Funktion heißt <code>data.frame()</code>.',
-    answers:['data.frame(stadt = ..., einwohner = ...)', 'data.frame(stadt=..., einwohner=...)'],
-    explain:'<code>data.frame(spalte1 = vektor1, spalte2 = vektor2)</code> — die Spaltennamen werden als Argumente übergeben.',
-    isStructural: true },
+    answers:['data.frame(stadt = c("Berlin", "Hamburg"), einwohner = c(3600000, 1800000))'],
+    explain:'<code>data.frame(spalte1 = vektor1, spalte2 = vektor2)</code> — die Spaltennamen werden als Argumente übergeben. Welche konkreten Werte Sie wählen, ist egal.',
+    isStructural: true,
+    structCols: ['stadt', 'einwohner'],
+    structCheck: 'is.data.frame(.usr) && all(c("stadt","einwohner") %in% names(.usr))' },
 
   // ── Import & Export ───────────────────────────────
   { topic:'import', type:'code',
@@ -2923,6 +2925,55 @@ isTRUE(all.equal(.usr, .ans))
   }
 }
 
+// Strukturprüfung: führt nur den Studi-Code aus und wertet aus, ob die
+// geforderte Struktur entstanden ist (structCheck-Ausdruck auf `.usr`).
+// Anders als execEquals braucht es KEINE Musterlösung — beliebige Werte zählen.
+async function execStruct(userCode, checkExpr) {
+  if (webRState !== 'ready') return undefined;
+  const expr = `local({
+${R_PREAMBLE}
+.usr <- {
+${userCode}
+}
+isTRUE(${checkExpr})
+})`;
+  try {
+    const result = await Promise.race([
+      webR.evalR(expr),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 6000))
+    ]);
+    const js = await result.toJs();
+    try { webR.destroy(result); } catch {}
+    return js && js.values && js.values[0] === true;
+  } catch (e) {
+    return undefined; // R-Fehler → unentscheidbar → String-/Regex-Fallback
+  }
+}
+
+// Fallback für Strukturfragen, wenn WebR nicht verfügbar ist: prüft rein per
+// Text, ob data.frame() aufgerufen und jede geforderte Spalte benannt wird.
+function structFallback(userCode, cols) {
+  const n = (userCode || '').toLowerCase();
+  if (!/data\.frame\s*\(/.test(n)) return false;
+  return (cols || []).every(c =>
+    new RegExp('\\b' + c.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*=').test(n));
+}
+
+// Führt eine asynchrone Prüfung aus und zeigt solange „Prüfe in R …" am Button.
+async function withCheckSpinner(fn) {
+  session.checking = true;
+  const btn = document.getElementById('check-btn');
+  const prevLabel = btn.textContent;
+  btn.textContent = 'Prüfe in R …';
+  btn.disabled = true;
+  try { return await fn(); }
+  finally {
+    session.checking = false;
+    btn.disabled = false;
+    btn.textContent = prevLabel;
+  }
+}
+
 async function checkAnswer() {
   if (session.answered) { nextQuestion(); return; }
   if (session.checking) return;
@@ -2939,20 +2990,25 @@ async function checkAnswer() {
       normUser.includes(normalizeCode(a)));
     isCorrect = stringCorrect;
 
+    // Strukturfragen (isStructural): Die konkreten Werte sind egal — bewertet
+    // wird, ob die geforderte Struktur entsteht (z.B. data.frame mit den
+    // richtigen Spalten). Beliebige fachlich korrekte Eingaben zählen.
+    if (!isCorrect && q.isStructural) {
+      if (webRState === 'ready' && !NO_EXEC.test(userAnswer)) {
+        const res = await withCheckSpinner(() => execStruct(userAnswer, q.structCheck));
+        isCorrect = res === true ? true
+                  : res === undefined ? structFallback(userAnswer, q.structCols)
+                  : false;
+      } else {
+        isCorrect = structFallback(userAnswer, q.structCols);
+      }
+    }
     // WebR nur befragen, wenn der String-Vergleich nicht schon greift und der
     // Code gefahrlos ausführbar ist. WebR kann nur zusätzlich AKZEPTIEREN
     // (gleichwertige Varianten), niemals etwas fälschlich ablehnen.
-    if (!stringCorrect && webRState === 'ready' &&
+    else if (!isCorrect && webRState === 'ready' &&
         !NO_EXEC.test(userAnswer) && !NO_EXEC.test(q.answers[0])) {
-      session.checking = true;
-      const btn = document.getElementById('check-btn');
-      const prevLabel = btn.textContent;
-      btn.textContent = 'Prüfe in R …';
-      btn.disabled = true;
-      const execResult = await execEquals(userAnswer, q.answers[0]);
-      session.checking = false;
-      btn.disabled = false;
-      btn.textContent = prevLabel;
+      const execResult = await withCheckSpinner(() => execEquals(userAnswer, q.answers[0]));
       if (execResult === true) isCorrect = true;
     }
 
